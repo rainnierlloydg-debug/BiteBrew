@@ -1,0 +1,30 @@
+{
+  "name": "bite-and-brew-workspace",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Express, MySQL, Prisma and Vanilla JavaScript staff workspace",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "setup:deps": "npm --prefix node-app install",
+    "start": "npm --prefix node-app start",
+    "dev": "npm --prefix node-app run dev",
+    "build": "npm --prefix node-app run build",
+    "check": "npm --prefix node-app run check",
+    "test": "npm --prefix node-app test",
+    "setup:local": "npm --prefix node-app run setup:local",
+    "db:generate": "npm --prefix node-app run db:generate",
+    "db:deploy": "npm --prefix node-app run db:deploy",
+    "admin": "npm --prefix node-app run admin",
+    "seed:menu": "npm --prefix node-app run seed:menu",
+    "seed:category-addons": "npm --prefix node-app run seed:category-addons",
+    "import:legacy": "npm --prefix node-app run import:legacy",
+    "backup": "npm --prefix node-app run backup",
+    "restore": "npm --prefix node-app run restore",
+    "test:browser": "npm --prefix node-app run test:browser",
+    "test:schema": "npm --prefix node-app run test:schema",
+    "menu:expand": "npm --prefix node-app run menu:expand"
+  }
+}

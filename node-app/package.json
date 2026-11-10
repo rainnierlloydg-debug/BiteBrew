@@ -1,0 +1,49 @@
+{
+  "name": "bite-and-brew-system",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "db:generate": "prisma generate",
+    "db:deploy": "prisma migrate deploy",
+    "setup:local": "node scripts/setup-local.js",
+    "admin": "node scripts/create-admin.js",
+    "import:legacy": "node scripts/import-legacy.js",
+    "seed:menu": "node scripts/seed-menu.js",
+    "seed:category-addons": "node scripts/seed-category-addons.js",
+    "vapid:generate": "node scripts/vapid.js",
+    "backup": "node scripts/backup.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "check": "node scripts/check.js",
+    "build": "node scripts/build.js",
+    "restore": "node scripts/backup.js --restore",
+    "test:browser": "node scripts/browser-check.js",
+    "test:schema": "node scripts/schema-check.js",
+    "menu:expand": "node scripts/expand-menu.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "bcryptjs": "3.0.2",
+    "dotenv": "17.2.3",
+    "express": "5.1.0",
+    "express-rate-limit": "8.2.1",
+    "express-session": "1.18.2",
+    "helmet": "8.1.0",
+    "multer": "2.0.2",
+    "mysql2": "3.15.3",
+    "pdfkit": "0.17.2",
+    "sharp": "0.34.5",
+    "socket.io": "4.8.1",
+    "web-push": "3.6.7",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "prisma": "6.19.0",
+    "socket.io-client": "4.8.1"
+  }
+}
