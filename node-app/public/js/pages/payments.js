@@ -1,0 +1,19 @@
+import { api, operation, query } from '../api.js';
+import { e, money, dateTime, header, icon, badge, label, table, pager, bindPager, field, option, toast } from '../ui.js';
+import { reasonForm } from './orders.js';
+export async function render(ctx) {
+  ctx.requireOnline();
+  const filter = ctx.filters.payments ||= { tab: ctx.params.request ? 'requests' : 'payments', page: 1, status: '' };
+  const result = await api('/' + filter.tab + '?' + query({ page: filter.page, status: filter.status }));
+  const columns = [{ title: 'Order', render: row => `<button class="table-link" data-order="${e(row.orderId)}">${e(row.order.number)}</button><small>${dateTime(row.createdAt)}</small>` }, { title: filter.tab === 'requests' ? 'Request' : 'Method', render: row => e(label(row.method || row.kind)) }, { title: 'Amount', numeric: true, render: row => row.amount === null ? '—' : money(row.amount) }, ...(filter.tab !== 'refunds' ? [{ title: 'Status', render: row => badge(row.status) }] : [{ title: 'Reason', key: 'reason' }]), { title: 'Staff', render: row => e(row.recordedBy?.name || row.actor?.name || row.requestedBy?.name || '') }, { title: 'Actions', render: row => `<div class="actions wrap"><button class="secondary" data-order="${e(row.orderId)}">View order</button>${filter.tab === 'requests' && row.status === 'PENDING' && ctx.state.user.role === 'OWNER' ? `<button data-approve="${e(row.id)}">Approve</button><button class="secondary danger" data-reject="${e(row.id)}">Reject</button>` : ''}</div>` }];
+  ctx.root.innerHTML = header('Payments & Refunds', 'Verified collections, payment histories and authorized refunds.', '', 'PAYMENT MANAGEMENT') + `<div class="tabs">${[['payments', 'Payments'], ['requests', 'Approval requests'], ['refunds', 'Refunds']].map(([tab, title]) => `<button data-tab="${tab}" class="${tab === filter.tab ? 'selected' : ''}">${title}</button>`).join('')}</div><form class="glass filter-panel" id="payment-filter">${filter.tab !== 'refunds' ? field('Status', `<select name="status">${option('', 'All statuses', filter.status)}${(filter.tab === 'payments' ? ['PENDING', 'VERIFIED', 'REJECTED'] : ['PENDING', 'APPROVED', 'REJECTED']).map(value => option(value, label(value), filter.status)).join('')}</select>`) : '<p>Refunds preserve the original verified payment and do not reopen order balances.</p>'}<button class="secondary">Refresh</button></form><section class="glass panel"><div class="section-title"><h2>${filter.tab === 'requests' ? 'Approval requests' : label(filter.tab)}</h2><span class="count">${result.meta.total} records</span></div>${table(columns, result.data)}${pager(result.meta)}</section>`;
+  ctx.root.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => { filter.tab = button.dataset.tab; filter.status = ''; filter.page = 1; ctx.refresh(); });
+  ctx.root.querySelector('#payment-filter').onsubmit = event => { event.preventDefault(); filter.status = event.currentTarget.elements.status?.value || ''; filter.page = 1; ctx.refresh(); };
+  ctx.root.querySelectorAll('[data-order]').forEach(button => button.onclick = () => ctx.openOrder(button.dataset.order));
+  for (const approved of [true, false]) ctx.root.querySelectorAll(approved ? '[data-approve]' : '[data-reject]').forEach(button => button.onclick = () => {
+    const request = result.data.find(row => row.id === (button.dataset.approve || button.dataset.reject)), submit = operation();
+    reasonForm(approved ? 'Approve request' : 'Reject request', `${e(label(request.kind))} · ${request.amount ? money(request.amount) : ''} · Original reason: ${request.reason}`, async reason => { await submit('/requests/' + request.id + '/review', { approved, reason }); ctx.refresh(); toast('Request reviewed.'); });
+  });
+  bindPager(ctx.root, page => { filter.page = page; ctx.refresh(); });
+  ctx.listen('server-change', event => { if (event.detail.topic === 'payments' && !document.querySelector('dialog[open]')) ctx.refresh(); });
+}

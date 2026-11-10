@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Bite & Brew Order and Sales Management System",
+  "short_name": "Bite & Brew",
+  "description": "Staff orders, kitchen preparation and sales in one workspace.",
+  "start_url": "/staff.html?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F0FDF4",
+  "theme_color": "#15803D",
+  "lang": "en-PH",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
