@@ -1,0 +1,18 @@
+{
+  "source": "Demonstration add-ons requested for burgers, fries and milk tea. Confirm prices before business use.",
+  "addons": [
+    { "code": "BB-ADD-BG-CHEESE", "category": "Burgers", "name": "Extra burger cheese", "price": "15.00" },
+    { "code": "BB-ADD-BG-LETTUCE", "category": "Burgers", "name": "Extra lettuce", "price": "10.00" },
+    { "code": "BB-ADD-BG-TOMATO", "category": "Burgers", "name": "Extra tomato", "price": "10.00" },
+    { "code": "BB-ADD-BG-SAUCE", "category": "Burgers", "name": "Extra burger sauce", "price": "10.00" },
+    { "code": "BB-ADD-BG-PATTY", "category": "Burgers", "name": "Extra beef patty", "price": "35.00", "productCodes": ["BB-BG-CLASSIC", "BB-BG-CHEESE", "BB-BG-DOUBLE", "BB-BG-BACON", "BB-BG-MUSHROOM", "BB-BG-BBQ", "BB-BG-JALAPENO", "BB-BG-HAWAIIAN", "BB-BG-EGG"] },
+    { "code": "BB-ADD-FR-CHEESESAUCE", "category": "Fries", "name": "Cheese sauce", "price": "15.00" },
+    { "code": "BB-ADD-FR-BACON", "category": "Fries", "name": "Bacon bits", "price": "20.00" },
+    { "code": "BB-ADD-FR-POWDER", "category": "Fries", "name": "Extra cheese powder", "price": "10.00" },
+    { "code": "BB-ADD-FR-BBQDIP", "category": "Fries", "name": "BBQ dip", "price": "10.00" },
+    { "code": "BB-ADD-MT-PEARLS", "category": "Milk Tea", "name": "Extra tapioca pearls", "price": "10.00" },
+    { "code": "BB-ADD-MT-NATA", "category": "Milk Tea", "name": "Nata de coco", "price": "15.00" },
+    { "code": "BB-ADD-MT-PUDDING", "category": "Milk Tea", "name": "Egg pudding", "price": "15.00" },
+    { "code": "BB-ADD-MT-CREAM", "category": "Milk Tea", "name": "Cream cheese topping", "price": "20.00" }
+  ]
+}

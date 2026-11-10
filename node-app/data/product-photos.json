@@ -1,0 +1,91 @@
+{
+  "source_image": "resources/images/ellas-pizza-product-photos.png",
+  "source_width": 1225,
+  "source_height": 620,
+  "frames": {
+    "EP-CHEESE": {
+      "x": 67,
+      "y": 3,
+      "width": 160,
+      "height": 82
+    },
+    "EP-HAM-CHEESE": {
+      "x": 305,
+      "y": 3,
+      "width": 163,
+      "height": 82
+    },
+    "EP-HAWAIIAN": {
+      "x": 543,
+      "y": 2,
+      "width": 164,
+      "height": 81
+    },
+    "EP-HAWAIIAN-DELIGHT": {
+      "x": 783,
+      "y": 2,
+      "width": 163,
+      "height": 82
+    },
+    "EP-VEGAN": {
+      "x": 67,
+      "y": 163,
+      "width": 160,
+      "height": 88
+    },
+    "EP-CHEESY-BEEF-HAM": {
+      "x": 305,
+      "y": 163,
+      "width": 163,
+      "height": 88
+    },
+    "EP-BEEF-MUSHROOM": {
+      "x": 543,
+      "y": 162,
+      "width": 164,
+      "height": 88
+    },
+    "EP-HAM-BACON": {
+      "x": 67,
+      "y": 321,
+      "width": 160,
+      "height": 85
+    },
+    "EP-PEPPERONI": {
+      "x": 305,
+      "y": 318,
+      "width": 163,
+      "height": 85
+    },
+    "EP-BACON-MUSHROOM": {
+      "x": 543,
+      "y": 316,
+      "width": 164,
+      "height": 86
+    },
+    "EP-ELLAS-BEST": {
+      "x": 783,
+      "y": 315,
+      "width": 163,
+      "height": 87
+    },
+    "EP-AMORE": {
+      "x": 67,
+      "y": 483,
+      "width": 160,
+      "height": 72
+    },
+    "EP-MEAT-LOVERS": {
+      "x": 305,
+      "y": 481,
+      "width": 163,
+      "height": 72
+    },
+    "EP-HAM-BEEF-MUSHROOM": {
+      "x": 783,
+      "y": 162,
+      "width": 163,
+      "height": 88
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "source": "Menu-board photograph supplied by the owner in this conversation",
+  "source_image": "data/menu-board.png",
+  "currency": "PHP",
+  "variant_name": "Menu price (size unspecified)",
+  "products": [
+    {
+      "code": "EP-CHEESE",
+      "name": "Pizza Cheese",
+      "price": "150.00"
+    },
+    {
+      "code": "EP-HAM-CHEESE",
+      "name": "Ham & Cheese",
+      "price": "120.00"
+    },
+    {
+      "code": "EP-HAWAIIAN",
+      "name": "Hawaiian",
+      "price": "130.00"
+    },
+    {
+      "code": "EP-HAWAIIAN-DELIGHT",
+      "name": "Hawaiian Delight",
+      "price": "160.00"
+    },
+    {
+      "code": "EP-VEGAN",
+      "name": "Vegan",
+      "price": "150.00"
+    },
+    {
+      "code": "EP-CHEESY-BEEF-HAM",
+      "name": "Cheesy Beef & Ham",
+      "price": "180.00"
+    },
+    {
+      "code": "EP-BEEF-MUSHROOM",
+      "name": "Beef with Mushroom",
+      "price": "170.00"
+    },
+    {
+      "code": "EP-HAM-BEEF-MUSHROOM",
+      "name": "Ham & Beef with Mushroom",
+      "price": "170.00"
+    },
+    {
+      "code": "EP-HAM-BACON",
+      "name": "Ham & Bacon",
+      "price": "170.00"
+    },
+    {
+      "code": "EP-PEPPERONI",
+      "name": "Pepperoni",
+      "price": "170.00"
+    },
+    {
+      "code": "EP-BACON-MUSHROOM",
+      "name": "Bacon Overload",
+      "price": "180.00"
+    },
+    {
+      "code": "EP-ELLAS-BEST",
+      "name": "Ella’s Best",
+      "price": "170.00"
+    },
+    {
+      "code": "EP-AMORE",
+      "name": "Amore",
+      "price": "180.00"
+    },
+    {
+      "code": "EP-MEAT-LOVERS",
+      "name": "Meat Lovers",
+      "price": "180.00"
+    }
+  ],
+  "addons": [
+    {
+      "code": "EP-ADD-CHEESE",
+      "name": "Cheese",
+      "price": "30.00"
+    },
+    {
+      "code": "EP-ADD-BEEF",
+      "name": "Beef",
+      "price": "30.00"
+    },
+    {
+      "code": "EP-ADD-BACON",
+      "name": "Bacon",
+      "price": "25.00"
+    },
+    {
+      "code": "EP-ADD-HAM",
+      "name": "Ham",
+      "price": "25.00"
+    },
+    {
+      "code": "EP-ADD-PEPPERONI",
+      "name": "Pepperoni",
+      "price": "25.00"
+    },
+    {
+      "code": "EP-ADD-MUSHROOM",
+      "name": "Mushroom",
+      "price": "20.00"
+    },
+    {
+      "code": "EP-ADD-BELL-PEPPER",
+      "name": "Bell Pepper",
+      "price": "30.00"
+    },
+    {
+      "code": "EP-ADD-WHITE-ONION",
+      "name": "White Onion",
+      "price": "20.00"
+    },
+    {
+      "code": "EP-ADD-PINEAPPLE",
+      "name": "Pineapple",
+      "price": "25.00"
+    }
+  ],
+  "pending_confirmation": []
+}
