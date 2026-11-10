@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { cents, decimal, calculate, rate, quoteMaterial, browserQuoteHash } from '../public/shared/calculation.js';
+const line = (values = {}) => ({ variantId: 'v1', name: 'Pizza Cheese', variantName: 'Pizza', quantity: 1, basePrice: '150.00', addons: [], ...values });
+test('money uses integer centavos and preserves decimal amounts', () => { assert.equal(cents('0.29'), 29); assert.equal(cents('150'), 15000); assert.equal(decimal(18505), '185.05'); assert.equal(decimal(-500), '-5.00'); });
+test('rejects invalid monetary inputs', () => { for (const value of ['-1', '1.005', 'NaN', 'Infinity', '1e3', '', ' 1', '100000000']) assert.throws(() => cents(value)); });
+test('add-ons and quantities are included per pizza', () => { const quote = calculate({ items: [line({ quantity: 2, addons: [{ id: 'cheese', name: 'Cheese', price: '30' }, { id: 'ham', name: 'Ham', price: '25' }] })] }); assert.equal(quote.lines[0].unitPrice, '205.00'); assert.equal(quote.total, '410.00'); });
+test('discounts and charges round half-up on the discounted subtotal', () => { const quote = calculate({ items: [line({ basePrice: '100.05' })], discount: { id: 'd', name: '10 percent', kind: 'PERCENT', value: '10.00' }, taxBps: 1200, serviceBps: 500 }); assert.equal(quote.discount, '10.01'); assert.equal(quote.tax, '10.80'); assert.equal(quote.service, '4.50'); assert.equal(quote.total, '105.34'); assert.equal(rate(5, 1000), 1); });
+test('fixed discounts are capped at subtotal', () => { const quote = calculate({ items: [line()], discount: { id: 'd', name: 'Promo', kind: 'FIXED', value: '999.00' }, taxBps: 1200 }); assert.equal(quote.total, '0.00'); assert.equal(quote.discount, '150.00'); });
+test('invalid quantities cannot create a total', () => { for (const quantity of [0, -1, 1.5, 101, NaN]) assert.throws(() => calculate({ items: [line({ quantity })] })); });
+test('authoritative and browser quote fingerprints agree', async () => { const quote = calculate({ items: [line()] }); assert.equal(await browserQuoteHash(quote), createHash('sha256').update(quoteMaterial(quote)).digest('hex')); });
+test('price and selection changes alter the fingerprint; notes do not', () => { const material = values => quoteMaterial(calculate({ items: [line(values)] })); assert.equal(material({ instructions: 'No onions' }), material({ instructions: 'Well done' })); assert.notEqual(material({}), material({ basePrice: '151.00' })); assert.notEqual(material({}), material({ quantity: 2 })); assert.notEqual(material({}), material({ name: 'Changed name' })); });
+test('calculation does not mutate cached menu or line objects', () => { const item = line({ addons: [{ id: 'z', name: 'Z', price: '25' }, { id: 'a', name: 'A', price: '30' }] }), original = structuredClone(item); calculate({ items: [item] }); assert.deepEqual(item, original); });

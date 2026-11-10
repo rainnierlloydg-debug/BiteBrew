@@ -1,0 +1,71 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+
+if (fs.existsSync('.env')) process.loadEnvFile('.env');
+const database = process.env.TEST_DATABASE_URL;
+test('staff signup requires owner approval and cannot grant admin access', { skip: !database || database.includes('CHANGE_ME'), timeout: 60000 }, async t => {
+  assert.ok(new URL(database).pathname.endsWith('_test'));
+  assert.notEqual(database, process.env.DATABASE_URL);
+  process.env.DATABASE_URL = database;
+  const migration = spawnSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], { env: process.env, stdio: 'pipe' });
+  assert.equal(migration.status, 0);
+  const [{ createApplication }, { db }, { hashPassword }] = await Promise.all([import('../server/app.js'), import('../server/db.js'), import('../server/lib/password.js')]);
+  const app = await createApplication({ jobs: false });
+  await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+  const base = 'http://127.0.0.1:' + app.server.address().port, suffix = randomUUID().slice(0, 8), password = 'Fixture staff password ' + suffix;
+  const email = `signup-${suffix}@example.test`, rejectedEmail = `reject-${suffix}@example.test`;
+  const owner = await db.user.create({ data: { name: 'DEMONSTRATION signup owner', email: `signup-owner-${suffix}@example.test`, role: 'OWNER', passwordHash: await hashPassword(password) } });
+  const reviewer = await db.user.create({ data: { name: 'DEMONSTRATION cashier reviewer', email: `signup-cashier-${suffix}@example.test`, role: 'CASHIER', passwordHash: await hashPassword(password) } });
+  t.after(async () => {
+    const users = await db.user.findMany({ where: { email: { in: [email, rejectedEmail, owner.email, reviewer.email] } }, select: { id: true } });
+    const ids = users.map(user => user.id);
+    await db.session.deleteMany({ where: { userId: { in: ids } } });
+    await db.auditLog.deleteMany({ where: { actorId: { in: ids } } });
+    await db.idempotency.deleteMany({ where: { userId: { in: ids } } });
+    await db.user.deleteMany({ where: { id: { in: ids } } });
+    await app.close();
+  });
+  function client() {
+    return { cookie: '', csrf: '', async request(route, { method = 'GET', data, status = 200, csrf = true, key = randomUUID() } = {}) {
+      const response = await fetch(base + '/api' + route, { method, headers: { Cookie: this.cookie, 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRF-Token': this.csrf } : {}), 'X-Operation-ID': key }, body: data ? JSON.stringify(data) : undefined });
+      const cookie = response.headers.getSetCookie()[0]; if (cookie) this.cookie = cookie.split(';')[0];
+      const result = await response.json(); assert.equal(response.status, status, route + ': ' + JSON.stringify(result.error)); if (result.data?.csrf) this.csrf = result.data.csrf; return result;
+    } };
+  }
+  const guest = client(), admin = client(), cashier = client();
+  await guest.request('/session');
+  const details = { name: 'DEMONSTRATION new staff', email, password };
+  await guest.request('/staff/register', { method: 'POST', data: details, csrf: false, status: 419 });
+  await guest.request('/staff/register', { method: 'POST', data: { ...details, role: 'OWNER' }, status: 422 });
+  const registered = await guest.request('/staff/register', { method: 'POST', data: details });
+  assert.equal(registered.data.passwordHash, undefined);
+  let pending = await db.user.findUnique({ where: { email } });
+  assert.equal(pending.active, false); assert.equal(pending.registrationPending, true); assert.notEqual(pending.passwordHash, password);
+  await guest.request('/login', { method: 'POST', data: { email, password }, status: 401 });
+  await guest.request('/staff/register', { method: 'POST', data: { ...details, password: 'Different valid password' } });
+  assert.equal((await db.user.findUnique({ where: { email } })).passwordHash, pending.passwordHash);
+  await admin.request('/session'); await admin.request('/login', { method: 'POST', data: { email: owner.email, password } });
+  await cashier.request('/session'); await cashier.request('/login', { method: 'POST', data: { email: reviewer.email, password } });
+  await cashier.request('/staff?status=pending', { status: 403 });
+  await cashier.request('/staff/' + pending.id + '/review-registration', { method: 'POST', data: { action: 'approve' }, status: 403 });
+  const listed = await admin.request('/staff?status=pending&q=' + encodeURIComponent(email));
+  assert.equal(listed.data.length, 1); assert.equal(listed.data[0].passwordHash, undefined);
+  assert.equal((await admin.request('/staff?q=' + encodeURIComponent(email))).meta.total, 0);
+  const review = '/staff/' + pending.id + '/review-registration';
+  await admin.request(review, { method: 'POST', data: { action: 'approve', role: 'OWNER' }, status: 422 });
+  const key = randomUUID();
+  await admin.request(review, { method: 'POST', data: { action: 'approve', role: 'KITCHEN' }, key });
+  await admin.request(review, { method: 'POST', data: { action: 'approve', role: 'KITCHEN' }, key });
+  const signedIn = await guest.request('/login', { method: 'POST', data: { email, password } });
+  assert.equal(signedIn.data.user.role, 'KITCHEN');
+  await guest.request('/staff', { status: 403 });
+  await admin.request(review, { method: 'POST', data: { action: 'reject' }, status: 409 });
+  await guest.request('/staff/register', { method: 'POST', data: { ...details, email: rejectedEmail } });
+  const rejected = await db.user.findUnique({ where: { email: rejectedEmail } });
+  await admin.request('/staff/' + rejected.id + '/review-registration', { method: 'POST', data: { action: 'reject' } });
+  await guest.request('/login', { method: 'POST', data: { email: rejectedEmail, password }, status: 401 });
+  assert.ok((await db.user.findUnique({ where: { id: rejected.id } })).archivedAt);
+});

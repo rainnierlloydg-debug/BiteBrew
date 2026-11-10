@@ -1,0 +1,11 @@
+import webpush from 'web-push';
+import fs from 'node:fs/promises';
+import { root } from '../server/config.js';
+import path from 'node:path';
+const file = path.join(root, '.env');
+const env = await fs.readFile(file, 'utf8');
+if (/^VAPID_PRIVATE_KEY=.+/m.test(env)) throw new Error('VAPID keys already exist. Do not rotate keys while browser subscriptions use them.');
+const keys = webpush.generateVAPIDKeys();
+const next = env.replace(/^VAPID_PUBLIC_KEY=.*$/m, 'VAPID_PUBLIC_KEY=' + keys.publicKey).replace(/^VAPID_PRIVATE_KEY=.*$/m, 'VAPID_PRIVATE_KEY=' + keys.privateKey);
+await fs.writeFile(file, next, { mode: 0o600 });
+console.log('VAPID keys saved privately in node-app/.env. Restart the Node server.');
