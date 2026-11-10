@@ -1,6 +1,6 @@
 # Bite & Brew Order and Sales Management System
 
-The new application is in **[node-app](node-app/README.md)**: Node.js / Express, MySQL / Prisma, HTML, CSS and Vanilla JavaScript, with a green glassmorphism staff interface. The root npm scripts delegate to it. It does not use Laravel or React at runtime.
+The new application is in **[node-app](node-app/README.md)**: Node.js / Express, MySQL / Prisma and React, with a green glassmorphism staff interface. The root npm scripts delegate to it. The frontend uses React; Laravel is not used at runtime.
 
 ```powershell
 cd node-app
@@ -13,7 +13,7 @@ npm start
 
 Local setup creates separate Node databases, leaving the existing application database untouched. For a fresh installation, replace `import:legacy` with `npm run admin` and `npm run seed:menu`. Open **http://127.0.0.1:3000**, using the configured origin.
 
-**Current status:** Node dependencies are installed. The automated suite passes all 29 tests, including real MySQL/API, role restrictions, payments/refunds, reports and authenticated WebSocket checks. Live push delivery, restore drills and deployment-specific checks remain outstanding. Installation, external requirements and exact limitations are documented in [node-app/README.md](node-app/README.md) and [verification](node-app/docs/VERIFICATION.md).
+**Current status:** Node dependencies are installed. The automated suite passes all 35 tests, including real MySQL/API, role restrictions, payments/refunds, reports and authenticated WebSocket checks. Live push delivery, restore drills and deployment-specific checks remain outstanding. Installation, external requirements and exact limitations are documented in [node-app/README.md](node-app/README.md) and [verification](node-app/docs/VERIFICATION.md).
 
 Laravel application source, entry points, Composer manifests, the Vite config and the old React/Vite npm packages have been removed. The preserved business media/attachments/backups and source database connection settings are private in `node-app/var/import`. The original MySQL database files remain unchanged in `.runtime/mysql-data`.
 

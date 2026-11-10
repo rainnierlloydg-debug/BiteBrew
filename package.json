@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "Express, MySQL, Prisma and Vanilla JavaScript staff workspace",
+  "description": "Express, MySQL, Prisma and React staff workspace",
   "engines": {
     "node": ">=22.12"
   },

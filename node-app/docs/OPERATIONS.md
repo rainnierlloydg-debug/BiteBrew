@@ -2,7 +2,7 @@
 
 ## Production operation
 
-Use Node 22.12+ and MySQL 8 with utf8mb4, InnoDB and UTC time. Install dependencies on the target platform so Sharp and Prisma use compatible native binaries. After the first successful install, retain the generated `package-lock.json` and use `npm ci` for repeatable deployments. Exact top-level dependencies are pinned; a resolved Node lockfile could not be generated while registry downloads were blocked here.
+Use Node 22.12+ and MySQL 8 with utf8mb4, InnoDB and UTC time. Install dependencies on the target platform so Sharp and Prisma use compatible native binaries. Use the checked-in lockfile with `npm ci --include=dev` for repeatable deployments, including the React build tools. `npm start` builds the local React runtime before starting Express, so retain esbuild when using that command. No CDN is required.
 
 Run `npm run db:generate`, `npm run db:deploy`, `npm run build`, then `npm start`. Provision credentials through private environment configuration. Do not expose `.env`, `var`, `data`, database backups or Prisma files as static website directories. Only `public` is publicly served. Product media requires a signed-in session. Persist the configured media directory across releases; ephemeral filesystem storage will lose uploads.
 

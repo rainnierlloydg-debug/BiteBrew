@@ -1,3 +1,4 @@
+import { renderMarkup } from '/assets/react-runtime.js';
 import { api } from './api.js';
 import { e, dateTime, errorMessage } from './ui.js';
 
@@ -5,17 +6,17 @@ import { e, dateTime, errorMessage } from './ui.js';
 export async function mountSupportChat(root, { customer = false, roomId, name = 'Staff', onAuthExpired = () => {} } = {}) {
   if (customer) roomId = (await api('/customer/chat', { authEvent: false })).data.id;
   const endpoint = customer ? '/customer/chat/' : '/chat/customers/';
-  root.innerHTML = `<div class="chat-conversation support-conversation"><div class="chat-heading"><h2>${e(name)}</h2><small>Online chat &middot; updates every 4 seconds</small></div><button type="button" class="text-button" data-older hidden>Load earlier messages</button><div class="chat-messages" aria-live="polite" aria-label="Messages"></div><div data-chat-error role="alert"></div><form class="chat-compose"><label class="visually-hidden" for="support-message">Message</label><textarea id="support-message" name="text" rows="2" maxlength="2000" placeholder="${customer ? 'Message the staff...' : 'Reply to customer...'}" required></textarea><button type="submit">Send</button></form></div>`;
+  renderMarkup(root, `<div class="chat-conversation support-conversation"><div class="chat-heading"><h2>${e(name)}</h2><small>Online chat &middot; updates every 4 seconds</small></div><button type="button" class="text-button" data-older hidden>Load earlier messages</button><div class="chat-messages" aria-live="polite" aria-label="Messages"></div><div data-chat-error role="alert"></div><form class="chat-compose"><label class="visually-hidden" for="support-message">Message</label><textarea id="support-message" name="text" rows="2" maxlength="2000" placeholder="${customer ? 'Message the staff...' : 'Reply to customer...'}" required></textarea><button type="submit">Send</button></form></div>`);
   let active = true, loading = false, hasMore = false, sending = false, pending = null;
   const messages = new Map(), box = root.querySelector('.chat-messages'), form = root.querySelector('form'), errorBox = root.querySelector('[data-chat-error]');
   function showError(error) {
     if (!active) return;
-    errorBox.innerHTML = errorMessage(error);
+    renderMarkup(errorBox, errorMessage(error));
     if ([401, 419].includes(error.status)) { stop(); onAuthExpired(); }
   }
   function paint(scroll) {
     const rows = [...messages.values()].sort((a, b) => a.id - b.id);
-    box.innerHTML = rows.length ? rows.map(message => `<article class="chat-message ${(message.senderRole === 'CUSTOMER') === customer ? 'mine' : ''}"><div><strong>${e(message.senderName)}</strong><span>${e(message.senderRole)}</span></div><p>${e(message.text).replaceAll('\n', '<br>')}</p><small>${dateTime(message.createdAt)} &middot; Delivered</small></article>`).join('') : '<p class="support-empty">No messages yet. Send a message to start the conversation.</p>';
+    renderMarkup(box, rows.length ? rows.map(message => `<article class="chat-message ${(message.senderRole === 'CUSTOMER') === customer ? 'mine' : ''}"><div><strong>${e(message.senderName)}</strong><span>${e(message.senderRole)}</span></div><p>${e(message.text).replaceAll('\n', '<br>')}</p><small>${dateTime(message.createdAt)} &middot; Delivered</small></article>`).join('') : '<p class="support-empty">No messages yet. Send a message to start the conversation.</p>');
     if (scroll) box.scrollTop = box.scrollHeight;
   }
   async function load(older = false) {
@@ -35,7 +36,7 @@ export async function mountSupportChat(root, { customer = false, roomId, name = 
         if (older || !ids.length) { hasMore = result.meta.hasMore; root.querySelector('[data-older]').hidden = !hasMore; }
         if (changed || !ids.length) paint(scroll);
         if (older) box.scrollTop = previousTop + box.scrollHeight - previousHeight;
-        errorBox.innerHTML = '';
+        renderMarkup(errorBox, '');
         next = !older && ids.length > 0 && result.meta.hasMore && result.data.length > 0;
       }
     } catch (error) { showError(error); } finally { loading = false; }
@@ -66,7 +67,7 @@ export async function mountSupportChat(root, { customer = false, roomId, name = 
 }
 
 export async function renderCustomerInbox(ctx) {
-  ctx.root.innerHTML = `<div class="page-heading"><div><p class="eyebrow">CUSTOMER COMMUNICATION</p><h1>Customer messages</h1><p>Reply to signed-in customers. Updates arrive every 4 seconds while online.</p></div><button type="button" class="secondary" data-team>Staff chat</button></div><section class="glass chat-layout"><aside class="chat-rooms"><h2>Customers</h2><div data-inbox></div><div class="pager"><button type="button" class="secondary" data-prev>Previous</button><button type="button" class="secondary" data-next>Next</button></div><div data-inbox-error role="alert"></div></aside><div data-conversation><p class="support-empty">Select a customer conversation.</p></div></section>`;
+  renderMarkup(ctx.root, `<div class="page-heading"><div><p class="eyebrow">CUSTOMER COMMUNICATION</p><h1>Customer messages</h1><p>Reply to signed-in customers. Updates arrive every 4 seconds while online.</p></div><button type="button" class="secondary" data-team>Staff chat</button></div><section class="glass chat-layout"><aside class="chat-rooms"><h2>Customers</h2><div data-inbox></div><div class="pager"><button type="button" class="secondary" data-prev>Previous</button><button type="button" class="secondary" data-next>Next</button></div><div data-inbox-error role="alert"></div></aside><div data-conversation><p class="support-empty">Select a customer conversation.</p></div></section>`);
   ctx.root.querySelector('[data-team]').onclick = () => { ctx.filters.chat.mode = 'staff'; ctx.refresh(); };
   let active = true, stopChat, selected = ctx.filters.chat.supportRoomId, page = 1, busy = false;
   const inbox = ctx.root.querySelector('[data-inbox]'), panel = ctx.root.querySelector('[data-conversation]');
@@ -85,13 +86,13 @@ export async function renderCustomerInbox(ctx) {
     try {
       const result = await api('/chat/customers?pageSize=25&page=' + page);
       if (!active) return;
-      inbox.innerHTML = result.data.length ? result.data.map(room => `<button type="button" class="chat-room ${room.id === selected ? 'selected' : ''}" data-customer-room="${e(room.id)}"><strong>${e(room.name)}</strong><small>${e(room.lastMessage?.text || 'New customer conversation')}</small></button>`).join('') : '<p class="support-empty">No customer conversations yet.</p>';
+      renderMarkup(inbox, result.data.length ? result.data.map(room => `<button type="button" class="chat-room ${room.id === selected ? 'selected' : ''}" data-customer-room="${e(room.id)}"><strong>${e(room.name)}</strong><small>${e(room.lastMessage?.text || 'New customer conversation')}</small></button>`).join('') : '<p class="support-empty">No customer conversations yet.</p>');
       ctx.root.querySelector('[data-prev]').disabled = page <= 1;
       ctx.root.querySelector('[data-next]').disabled = page * 25 >= result.meta.total;
-      inbox.querySelectorAll('[data-customer-room]').forEach(button => button.onclick = () => select(result.data.find(room => room.id === button.dataset.customerRoom)).catch(error => { ctx.root.querySelector('[data-inbox-error]').innerHTML = errorMessage(error); }));
+      inbox.querySelectorAll('[data-customer-room]').forEach(button => button.onclick = () => select(result.data.find(room => room.id === button.dataset.customerRoom)).catch(error => { renderMarkup(ctx.root.querySelector('[data-inbox-error]'), errorMessage(error)); }));
       if (!stopChat && result.data.length) await select(result.data.find(room => room.id === selected) || result.data[0]);
-      ctx.root.querySelector('[data-inbox-error]').innerHTML = '';
-    } catch (error) { if (active) ctx.root.querySelector('[data-inbox-error]').innerHTML = errorMessage(error); }
+      renderMarkup(ctx.root.querySelector('[data-inbox-error]'), '');
+    } catch (error) { if (active) renderMarkup(ctx.root.querySelector('[data-inbox-error]'), errorMessage(error)); }
     finally { busy = false; }
   }
   ctx.root.querySelector('[data-prev]').onclick = () => { page = Math.max(1, page - 1); loadInbox(); };

@@ -2,7 +2,13 @@
 
 Updated on 8 November 2026. All 29 automated tests now pass, including real MySQL/API and authenticated WebSocket integration using a separate test database. Owner/cashier/kitchen authorization is enforced in API middleware and sensitive service operations. Business records were not used for test fixtures. Live push, restore drills and deployment-specific acceptance are still required.
 
-## Executed checks
+## React migration verification (11 November 2026)
+
+React 19 now renders the frontend. All 35 automated tests passed against the dedicated test database, and headless Edge checks passed for catalog/cart/checkout, all staff screens, permissions, customer chat and offline drafts. React-specific checks cover editable form defaults, select/textarea values, nested rendering, escaped text and unmount cleanup. Existing CSS and shared calculation/storage modules are unchanged. Original-source fixture screenshots are retained locally for comparison. Backend APIs and migrations were not changed.
+
+The fixture navigation helper now waits for active synchronization before a full reload; the original baseline could abandon a synchronization lease during rapid automated page navigation. This changes the test harness, not the application synchronizer.
+
+## Executed checks (original release)
 
 | Check | Result | What it establishes |
 |---|---|---|
@@ -11,7 +17,7 @@ Updated on 8 November 2026. All 29 automated tests now pass, including real MySQ
 | MySQL/API/WebSocket integration suite | Passed; 29 total tests, zero failures/skips | Real session/CSRF and role restrictions, menu/archive, snapshots, idempotency, workflow, cash/GCash/refunds, consistent exports, persistent authenticated chat and session revocation |
 | Initial SQL on real MySQL 8.0.30 | Passed | Creates 25 tables / 32 foreign keys, enum default, transaction deletion restriction; temporary isolated database removed after checking |
 | Headless Edge fixture checks | Passed | All 14 admin screens render without uncaught errors; responsive desktop/mobile POS and add-on totals; installed cached shell/menu; expired-session pause; explicit revised-estimate acceptance; conflict state; idempotent retry after a lost response; local-data cleanup |
-| PWA public-asset preparation | Passed | Manifest/PNG icons, precache asset presence and versioned cache; no frontend framework needed |
+| PWA public-asset preparation | Passed | Manifest/PNG icons, precache asset presence and versioned cache; React runtime is bundled locally |
 
 Evidence: [browser results](verification-artifacts/browser-result.json), [SQL results](verification-artifacts/schema-result.json), [desktop dashboard](verification-artifacts/dashboard-desktop-fixture.png), [desktop POS](verification-artifacts/pos-desktop-fixture.png), [mobile POS](verification-artifacts/pos-mobile-fixture.png), [offline POS](verification-artifacts/offline-pos-fixture.png). Screenshots and browser records are explicitly **DEMONSTRATION UI fixtures**; they are not actual sales or proof of backend persistence.
 
@@ -31,7 +37,7 @@ Configure the dedicated MySQL `TEST_DATABASE_URL` before accepting integration r
 
 | Area | Implementation |
 |---|---|
-| Architecture | Same-origin Express REST backend, Prisma MySQL schema/migration, modular Vanilla JS ES modules, responsive green glass UI |
+| Architecture | Same-origin Express REST backend, Prisma MySQL schema/migration, React frontend with preserved controllers and responsive green glass UI |
 | Authentication | Native salted scrypt, bcrypt legacy verification, MySQL sessions, HttpOnly/SameSite cookies, Secure cookies in production, CSRF/Origin validation, login limiting, password changes, permission middleware and account/session invalidation |
 | Menu / people | Category/product/variant/add-on/discount/customer/staff CRUD, safe image decoding/reencoding, availability, archive/restore and uniqueness/relationship checks |
 | POS / workflow | Backend quotes, quantity/add-on/charge/discount calculations, transaction snapshots, unique official numbers, version guards, controlled corrections, reasons, role-limited transitions and kitchen redaction |

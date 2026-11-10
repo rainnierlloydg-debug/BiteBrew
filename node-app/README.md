@@ -1,8 +1,14 @@
 # Bite & Brew Order and Sales Management System
 
-Express 5, Node.js 22.12+, Prisma 6, MySQL 8, semantic HTML, CSS and Vanilla JavaScript ES modules. The frontend and API share one origin. No PHP, Laravel, React, Vite or frontend build framework is required by this application.
+Express 5, Node.js 22.12+, Prisma 6, MySQL 8 and React 19. The frontend and API share one origin. esbuild produces the local React runtime; no PHP or Laravel runtime is required.
 
-**Verification status:** all 29 automated tests pass, including real MySQL/API and authenticated WebSocket integration. Owner, cashier and kitchen restrictions are tested; live push delivery, restore drills and device-specific checks remain outstanding. See [verification](docs/VERIFICATION.md) for exact results and remaining acceptance checks. Do not use this release for business transactions until those checks pass.
+**Verification status:** all 35 automated tests pass, including real MySQL/API and authenticated WebSocket integration. Owner, cashier and kitchen restrictions are tested; live push delivery, restore drills and device-specific checks remain outstanding. See [verification](docs/VERIFICATION.md) for exact results and remaining acceptance checks. Do not use this release for business transactions until those checks pass.
+
+## React frontend
+
+The landing page, catalog and customer account screens are React components in `frontend/components/`. Staff pages, product dialogs, cart and chat render React elements through `frontend/markup.jsx`, retaining the existing controllers and form bindings. This compatibility layer converts application-owned, escaped templates into React elements; it does not use `dangerouslySetInnerHTML`. Native browser dialogs, session handling, APIs, CSS, storage keys and business calculations retain their existing behavior.
+
+Run `npm run build` after source changes. It bundles React locally into `public/assets/react-runtime.js`, regenerates the PWA cache version, and requires no CDN. Generated assets are ignored by Git. `npm start`, `npm run dev` and browser checks build automatically first. The existing URLs (`/`, `/staff.html`, `/customer.html`) are preserved.
 
 ## Local installation
 

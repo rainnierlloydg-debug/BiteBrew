@@ -1,3 +1,4 @@
+import { renderMarkup } from '/assets/react-runtime.js';
 export const e = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export const money = value => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0));
 export const dateTime = value => value ? new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
@@ -37,7 +38,7 @@ export function errorMessage(error) { return `<div class="notice error" role="al
 export function toast(message, type = 'info') { const element = document.createElement('div'); element.className = 'toast ' + type; element.textContent = message; document.querySelector('#toasts').append(element); setTimeout(() => element.remove(), 6000); }
 export function modal(title, body, ready) {
   const dialog = document.createElement('dialog'); dialog.className = 'glass modal';
-  dialog.innerHTML = `<div class="modal-heading"><h2>${e(title)}</h2><button class="icon-button secondary" data-close aria-label="Close dialog">${icon('close')}</button></div><div class="modal-body">${body}</div>`;
+  renderMarkup(dialog, `<div class="modal-heading"><h2>${e(title)}</h2><button class="icon-button secondary" data-close aria-label="Close dialog">${icon('close')}</button></div><div class="modal-body">${body}</div>`);
   document.body.append(dialog); let dirty = false, force = false;
   const close = (saved = false) => { if (!saved && dirty && !confirm('Discard unsaved changes?')) return; force = true; dialog.close(); };
   dialog.markDirty = () => { dirty = true; dialog.dataset.dirty = 'true'; };

@@ -119,15 +119,35 @@ try {
   socket.onmessage = event => { const value = JSON.parse(event.data); if (value.id) { const entry = pending.get(value.id); if (!entry) return; pending.delete(value.id); clearTimeout(entry.timer); value.error ? entry.reject(new Error(value.error.message)) : entry.resolve(value.result); } else if (value.method === 'Runtime.exceptionThrown') errors.push(value.params.exceptionDetails.exception?.description || value.params.exceptionDetails.text); };
   const send = (method, params = {}) => new Promise((resolve, reject) => { const id = ++sequence, timer = setTimeout(() => { pending.delete(id); reject(new Error('CDP timeout: ' + method)); }, 12000); pending.set(id, { resolve, reject, timer }); socket.send(JSON.stringify({ id, method, params })); });
   const evaluate = async expression => { const result = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text); return result.result?.value; };
-  const waitFor = async expression => { for (let count = 0; count < 100; count++) { if (await evaluate(expression)) return; await pause(100); } throw new Error('Browser condition timed out: ' + expression); };
-  const screenshot = async name => { const value = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(artifacts, name + '.png'), Buffer.from(value.data, 'base64')); };
-  const navigate = async page => { await send('Page.navigate', { url: base + '/?page=' + page }); await waitFor(`document.querySelector('#breadcrumb-page')?.textContent && !document.querySelector('.loading')`); assert.equal(await evaluate(`Boolean(document.querySelector('#page-content .notice.error'))`), false, page + ' displayed an error'); };
+  const waitFor = async expression => { for (let count = 0; count < 100; count++) { if (await evaluate('Boolean(' + expression + ')')) return; await pause(100); } throw new Error('Browser condition timed out: ' + expression); };
+  const screenshot = async name => {
+    await evaluate(`Promise.all([...document.images].filter(image => {const rect=image.getBoundingClientRect();return rect.bottom>0&&rect.top<innerHeight&&rect.right>0&&rect.left<innerWidth;}).map(image=>image.complete?Promise.resolve():new Promise(resolve=>{image.addEventListener('load',resolve,{once:true});image.addEventListener('error',resolve,{once:true});setTimeout(resolve,3000);}))) .then(()=>true)`);
+    const value = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(artifacts, name + '.png'), Buffer.from(value.data, 'base64'));
+  };
+  const settleSynchronizer = async () => {
+    await pause(100);
+    await evaluate(`(async()=>{if(!document.querySelector('#breadcrumb-page'))return true;const store=await import('/js/offline-store.js');for(let attempt=0;attempt<100;attempt++){const database=await store.database();const lease=await new Promise((resolve,reject)=>{const request=database.transaction('meta','readonly').objectStore('meta').get('syncLease');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});database.close();if(!lease||lease.expiresAt<Date.now())return true;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('Fixture navigation must wait for active synchronization to finish');})()`);
+  };
+  const navigate = async page => { await settleSynchronizer(); await send('Page.navigate', { url: base + '/?page=' + page }); await waitFor(`document.querySelector('#breadcrumb-page')?.textContent && !document.querySelector('.loading')`); assert.equal(await evaluate(`Boolean(document.querySelector('#page-content .notice.error'))`), false, page + ' displayed an error'); };
   await send('Runtime.enable'); await send('Network.enable'); await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: base + '/' });
   await waitFor(`document.querySelector('.hero h1') && [...document.querySelectorAll('img')].every(image => image.complete && image.naturalWidth > 0)`);
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), true, 'Landing desktop overflow');
   assert.equal(await evaluate(`document.querySelector('a[href="/customer.html"]') !== null && document.querySelector('a[href="/staff.html"]') !== null`), true, 'Landing links to both login pages');
+  assert.equal(await evaluate(`(async()=>{const runtime=await import('/assets/react-runtime.js');return runtime.reactVersion.startsWith('19.') && runtime.isReactRoot(document.querySelector('#landing-root'));})()`), true, 'Landing uses the local React root');
+  const controlResult = await evaluate(`(async()=>{
+    const {renderMarkup,isReactRoot}=await import('/assets/react-runtime.js');
+    const host=document.createElement('div');host.hidden=true;document.body.append(host);
+    renderMarkup(host,'<form><input name="text" value="original"><input name="check" type="checkbox" checked><select name="size"><option value="small">Small</option><option value="large" selected>Large</option></select><textarea name="note">Saved note</textarea></form>');
+    const form=host.querySelector('form');const defaults=[form.elements.text.value,form.elements.check.checked,form.elements.size.value,form.elements.note.value];
+    form.elements.text.value='edited';form.elements.check.click();const editable=form.elements.text.value==='edited'&&!form.elements.check.checked;
+    renderMarkup(host,'<div data-slot></div>');renderMarkup(host.querySelector('[data-slot]'),'<p>Nested view</p>');renderMarkup(host,'<p>&lt;img src=x&gt;</p>');
+    const escaped=host.querySelector('img')===null&&host.textContent==='<img src=x>';
+    host.remove();await new Promise(resolve=>setTimeout(resolve,0));return {defaults,editable,escaped,disposed:!isReactRoot(host)};
+  })()`);
+  assert.deepEqual(controlResult,{defaults:['original',true,'large','Saved note'],editable:true,escaped:true,disposed:true});
+  results.push('React roots preserve editable form defaults, escaped text, nested views and unmount cleanup');
   await screenshot('landing-desktop');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), true, 'Landing mobile overflow');
@@ -156,7 +176,9 @@ try {
   await evaluate(`document.querySelector('[data-cart]').click(); document.querySelector('[data-checkout]').click()`);
   await waitFor(`document.querySelector('#customer-form')`);
   assert.equal(customerCheckoutCount, 0, 'Guest cannot place an order');
-  await evaluate(`document.querySelector('[data-switch]').click(); const form = document.querySelector('#customer-form'); form.elements.name.value = 'DEMONSTRATION customer'; form.elements.email.value = 'customer@example.test'; form.elements.password.value = 'Fixture password 12345'; form.requestSubmit()`);
+  await evaluate(`document.querySelector('[data-switch]').click()`);
+  await waitFor(`document.querySelector('#customer-form')?.elements.name`);
+  await evaluate(`const form = document.querySelector('#customer-form'); form.elements.name.value = 'DEMONSTRATION customer'; form.elements.email.value = 'customer@example.test'; form.elements.password.value = 'Fixture password 12345'; form.requestSubmit()`);
   await waitFor(`document.querySelector('.shop-dialog .shop-form [name=contact]')`);
   await evaluate(`const form = document.querySelector('.shop-form'); form.elements.contact.value = '09000000000'; form.requestSubmit()`);
   await waitFor(`document.querySelector('[data-place]')`);
@@ -279,4 +301,12 @@ try {
   results.push('Staff registration validates passwords, stays pending and is approved with an owner-assigned role');
   assert.deepEqual(errors, [], 'Uncaught browser errors');
   fs.writeFileSync(path.join(artifacts, 'browser-result.json'), JSON.stringify({ checkedAt: new Date(), harness: 'Isolated UI fixtures; no MySQL, push provider or actual WebSocket verification', passed: results, errors }, null, 2)); console.log(results.join('\n')); console.log('Browser fixture checks passed. Artifacts: docs/verification-artifacts');
+} catch (error) {
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ id: 999999, method: 'Runtime.evaluate', params: { expression: 'JSON.stringify({url: location.href, text: document.body.innerText})', returnByValue: true } }));
+    const previous = socket.onmessage;
+    socket.onmessage = event => { const value = JSON.parse(event.data); if (value.id === 999999) fs.writeFileSync(path.join(artifacts, 'browser-failure.json'), JSON.stringify({ error: error.message, errors, page: value.result?.result?.value }, null, 2)); else previous(event); };
+    await pause(200);
+  }
+  throw error;
 } finally { socket?.close(); edge.kill(); await new Promise(resolve => server.close(resolve)); }
