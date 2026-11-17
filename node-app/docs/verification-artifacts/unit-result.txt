@@ -1,0 +1,23 @@
+✔ money uses integer centavos and preserves decimal amounts (1.2489ms)
+✔ rejects invalid monetary inputs (0.3489ms)
+✔ add-ons and quantities are included per pizza (9.6307ms)
+✔ discounts and charges round half-up on the discounted subtotal (0.3071ms)
+✔ fixed discounts are capped at subtotal (1.1986ms)
+✔ invalid quantities cannot create a total (0.2968ms)
+✔ authoritative and browser quote fingerprints agree (8.7775ms)
+✔ price and selection changes alter the fingerprint; notes do not (0.7138ms)
+✔ calculation does not mutate cached menu or line objects (1.3811ms)
+﹣ MySQL API, workflow, reports and authenticated WebSocket integration (1.599ms) # Configure TEST_DATABASE_URL and install Node dependencies to run real integration checks.
+✔ passwords are salted, hashed and verified with no plaintext storage (678.4132ms)
+✔ roles block finance and account administration for kitchen (1.9944ms)
+✔ public account data excludes passwords and authentication version (0.4202ms)
+✔ encrypted backup roundtrip preserves records and media (363.8952ms)
+✔ backup integrity rejects wrong passphrases and tampering (470.6145ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 1894.7344

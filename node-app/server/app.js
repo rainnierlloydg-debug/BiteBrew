@@ -12,9 +12,11 @@ import { attachRealtime } from './realtime.js';
 import { documentHtml, receiptPdf } from './controllers/documents.js';
 import { overdueNotifications, deliverPush } from './services/notifications.js';
 import { z } from 'zod';
+import { applyBranding } from './services/branding.js';
 
 export async function createApplication({ jobs = true } = {}) {
   validateEnvironment(); await db.$connect();
+  await applyBranding();
   const app = express();
   app.disable('x-powered-by'); app.set('trust proxy', config.trustProxy);
   app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:', 'blob:'], connectSrc: ["'self'", config.origin.replace(/^http/, 'ws')], fontSrc: ["'self'"], frameSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'self'"], formAction: ["'self'"], upgradeInsecureRequests: config.production ? [] : null } }, crossOriginEmbedderPolicy: false }));

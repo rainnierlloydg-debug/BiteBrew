@@ -16,6 +16,7 @@
 /node-app/var
 /coverage
 /vendor
+/storage
 /.runtime
 /.bootstrap-temp
 Thumbs.db

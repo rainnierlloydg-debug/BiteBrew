@@ -1,0 +1,72 @@
+{
+  "baseline": "Original source fixture",
+  "comparison": "React fixture",
+  "notes": "Transient smooth-scroll/background positions and timestamps may differ. CSS files are byte-identical; the checkout content region is compared independently of its backdrop.",
+  "rows": [
+    {
+      "file": "burgers-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "customer-chat-mobile.png",
+      "changedPercent": 0.01
+    },
+    {
+      "file": "customer-checkout-mobile.png",
+      "changedPercent": 33.32
+    },
+    {
+      "file": "dashboard-desktop-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "fries-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "guest-cart-mobile.png",
+      "changedPercent": 0.23
+    },
+    {
+      "file": "kitchen-role-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "landing-desktop.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "landing-mobile.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "milk-tea-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "offline-pos-fixture.png",
+      "changedPercent": 10.2
+    },
+    {
+      "file": "pos-desktop-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "pos-mobile-fixture.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "staff-customer-inbox.png",
+      "changedPercent": 0.01
+    },
+    {
+      "file": "staff-pending-approval.png",
+      "changedPercent": 0
+    },
+    {
+      "file": "staff-registration-mobile.png",
+      "changedPercent": 0.17
+    }
+  ],
+  "checkoutContentDifferentChannels": 0
+}

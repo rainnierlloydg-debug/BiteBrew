@@ -9,6 +9,7 @@ import { fail } from '../lib/errors.js';
 import { authorize } from '../lib/permissions.js';
 import { pagination, pageResult } from '../lib/time.js';
 import { cents } from '../../public/shared/calculation.js';
+import { brandText } from '../../public/shared/brand.js';
 
 export const uuid = z.uuid();
 export const amount = z.string().regex(/^\d{1,8}(?:\.\d{1,2})?$/, 'Enter a non-negative amount with at most two decimal places.');
@@ -23,7 +24,7 @@ export async function catalog(actor, query = {}, management = false) {
   if (query.archived === '1' && !owner) fail(403, 'FORBIDDEN', 'Only the owner can view archived records.');
   const where = { archivedAt: owner && query.archived === '1' ? { not: null } : null, ...(!management ? { active: true, category: { archivedAt: null, active: true } } : {}), ...(query.categoryId ? { categoryId: uuid.parse(query.categoryId) } : {}), ...(query.q ? { OR: [{ name: { contains: String(query.q).slice(0, 120) } }, { code: { contains: String(query.q).slice(0, 120) } }] } : {}) };
   const [rows, total] = await db.$transaction([db.menuItem.findMany({ where, include: { category: true, variants: { include: { addons: { include: { addon: true } } }, orderBy: { createdAt: 'asc' } } }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], skip: p.skip, take: p.take }), db.menuItem.count({ where })]);
-  return pageResult(rows.map(row => ({ ...row, variants: row.variants.map(variant => ({ ...variant, addons: variant.addons.map(link => link.addon) })) })), total, p);
+  return pageResult(rows.map(row => ({ ...row, name: brandText(row.name), description: brandText(row.description), variants: row.variants.map(variant => ({ ...variant, addons: variant.addons.map(link => link.addon) })) })), total, p);
 }
 export async function saveProduct(actor, key, id, input) {
   authorize(actor, 'menu');
