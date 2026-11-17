@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { db } from '../db.js';
-import { atomic } from '../lib/atomic.js';
+import { atomic, audit } from '../lib/atomic.js';
 import { fail } from '../lib/errors.js';
 import { pagination, pageResult } from '../lib/time.js';
 const limits = new Map();
@@ -16,35 +16,37 @@ export async function roomAccess(tx, actor, id) {
   if (actor.role === 'KITCHEN' && room.orderId && !room.order?.confirmedAt) fail(403, 'CHAT_ROOM', 'This order conversation is not available to the kitchen.');
   return room;
 }
-export async function ensureRoom(actor, orderId = null) {
+export async function ensureRoom(actor, orderId = null, { reopen = false } = {}) {
   if (orderId) {
     z.uuid().parse(orderId);
     const order = await db.order.findUnique({ where: { id: orderId } });
     if (!order) fail(404, 'NOT_FOUND', 'Order not found.');
     if (actor.role === 'KITCHEN' && !order.confirmedAt) fail(403, 'CHAT_ROOM', 'This order is not in the kitchen workflow.');
     const room = await db.chatRoom.upsert({ where: { key: 'order:' + orderId }, create: { key: 'order:' + orderId, orderId, name: order.number, createdAt: new Date() }, update: {} });
-    await joinRoom(actor, room.id); return room;
+    await joinRoom(actor, room.id, reopen); return room;
   }
   const room = await db.chatRoom.upsert({ where: { key: 'general' }, create: { key: 'general', name: 'General staff', createdAt: new Date() }, update: {} });
-  await joinRoom(actor, room.id); return room;
+  await joinRoom(actor, room.id, reopen); return room;
 }
-export async function joinRoom(actor, roomId) {
+export async function joinRoom(actor, roomId, reopen = false) {
   await roomAccess(db, actor, roomId);
-  await db.chatParticipant.upsert({ where: { roomId_userId: { roomId, userId: actor.id } }, create: { roomId, userId: actor.id, joinedAt: new Date() }, update: {} });
+  await db.chatParticipant.upsert({ where: { roomId_userId: { roomId, userId: actor.id } }, create: { roomId, userId: actor.id, joinedAt: new Date() }, update: reopen ? { hidden: false } : {} });
   return { roomId };
 }
 export async function roomList(actor, query = {}) {
   await ensureRoom(actor);
-  const p = pagination(query), where = actor.role === 'KITCHEN' ? { OR: [{ orderId: null }, { order: { confirmedAt: { not: null } } }] } : {};
+  const p = pagination(query), where = { participants: { none: { userId: actor.id, hidden: true } }, ...(actor.role === 'KITCHEN' ? { OR: [{ orderId: null }, { order: { confirmedAt: { not: null } } }] } : {}) };
   const [rooms, total] = await db.$transaction([db.chatRoom.findMany({ where, take: p.take, skip: p.skip, orderBy: { createdAt: 'desc' }, include: { participants: { where: { userId: actor.id } }, messages: { take: 1, orderBy: { id: 'desc' } } } }), db.chatRoom.count({ where })]);
-  const data = await Promise.all(rooms.map(async room => ({ id: room.id, name: room.name, orderId: room.orderId, lastMessage: room.messages[0] || null, unread: await db.chatMessage.count({ where: { roomId: room.id, id: { gt: room.participants[0]?.lastReadMessageId || 0 }, senderId: { not: actor.id } } }) })));
+  const data = await Promise.all(rooms.map(async room => ({ id: room.id, name: room.name, orderId: room.orderId, lastMessage: room.messages[0]?.id > (room.participants[0]?.clearedThroughMessageId || 0) ? room.messages[0] : null, unread: await db.chatMessage.count({ where: { roomId: room.id, id: { gt: Math.max(room.participants[0]?.lastReadMessageId || 0, room.participants[0]?.clearedThroughMessageId || 0) }, senderId: { not: actor.id } } }) })));
   return pageResult(data, total, p);
 }
 export async function messageHistory(actor, roomId, query = {}) {
   await roomAccess(db, actor, roomId);
+  const participant = await db.chatParticipant.findUnique({ where: { roomId_userId: { roomId, userId: actor.id } } });
+  const cleared = participant?.clearedThroughMessageId || 0;
   const before = query.before ? z.coerce.number().int().positive().parse(query.before) : null, after = query.after ? z.coerce.number().int().min(0).parse(query.after) : null;
   const take = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 30));
-  const rows = await db.chatMessage.findMany({ where: { roomId, ...(before ? { id: { lt: before } } : after !== null ? { id: { gt: after } } : {}) }, orderBy: { id: after !== null ? 'asc' : 'desc' }, take: take + 1 });
+  const rows = await db.chatMessage.findMany({ where: { roomId, id: { gt: Math.max(cleared, after || 0), ...(before ? { lt: before } : {}) } }, orderBy: { id: after !== null ? 'asc' : 'desc' }, take: take + 1 });
   const hasMore = rows.length > take, data = rows.slice(0, take);
   return { data: after !== null ? data : data.reverse(), meta: { hasMore } };
 }
@@ -53,8 +55,23 @@ export async function sendMessage(actor, input) {
   chatRate(actor.id);
   return atomic(actor, data.clientId, 'chat.send', data, async (tx, current) => {
     await roomAccess(tx, current, data.roomId);
+    await tx.$queryRaw`SELECT id FROM chat_rooms WHERE id = ${data.roomId} FOR UPDATE`;
     await tx.chatParticipant.upsert({ where: { roomId_userId: { roomId: data.roomId, userId: current.id } }, create: { roomId: data.roomId, userId: current.id, joinedAt: new Date() }, update: {} });
-    return tx.chatMessage.create({ data: { roomId: data.roomId, senderId: current.id, senderName: current.name, senderRole: current.role, clientId: data.clientId, text: data.text, createdAt: new Date() } });
+    const message = await tx.chatMessage.create({ data: { roomId: data.roomId, senderId: current.id, senderName: current.name, senderRole: current.role, clientId: data.clientId, text: data.text, createdAt: new Date() } });
+    await tx.chatParticipant.updateMany({ where: { roomId: data.roomId, hidden: true }, data: { hidden: false } });
+    return message;
+  });
+}
+export async function deleteConversation(actor, key, roomId) {
+  z.uuid().parse(roomId);
+  return atomic(actor, key, 'chat.delete.' + roomId, { roomId }, async (tx, current) => {
+    await roomAccess(tx, current, roomId);
+    await tx.$queryRaw`SELECT id FROM chat_rooms WHERE id = ${roomId} FOR UPDATE`;
+    const last = await tx.chatMessage.findFirst({ where: { roomId }, orderBy: { id: 'desc' }, select: { id: true } });
+    const clearedThroughMessageId = last?.id || 0;
+    await tx.chatParticipant.upsert({ where: { roomId_userId: { roomId, userId: current.id } }, create: { roomId, userId: current.id, joinedAt: new Date(), hidden: true, clearedThroughMessageId, lastReadMessageId: clearedThroughMessageId }, update: { hidden: true, clearedThroughMessageId, lastReadMessageId: clearedThroughMessageId } });
+    await audit(tx, current, 'chat.conversation_deleted', 'chat_rooms', roomId, null, { scope: 'self', clearedThroughMessageId });
+    return { roomId, deleted: true, scope: 'self' };
   });
 }
 export async function markRead(actor, roomId, input) {

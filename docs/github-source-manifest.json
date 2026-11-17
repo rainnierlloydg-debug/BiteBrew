@@ -1,0 +1,605 @@
+{
+  "repository": "https://github.com/rainnierlloydg-debug/Bite-Brew.git",
+  "status": "Local commits prepared in .bootstrap-temp/bite-brew-github. main includes all three named contribution branches. Remote branch renaming is pending because the agent cannot connect to github.com:443.",
+  "groups": {
+    "rainnier-branch": {
+      "author": "rainnierlloydg-debug",
+      "email": "rainnierlloydg@gmail.com",
+      "files": [
+        {
+          "path": "node-app/data/category-addons.json",
+          "bytes": 1642,
+          "sha256": "86022c75009dcfecfc0ba32c452dc428ee079d7f0a6296b20b4568cf391df037"
+        },
+        {
+          "path": "node-app/data/extended-menu.json",
+          "bytes": 7765,
+          "sha256": "51673d10ff8714c594f2147243d1954b280f8f81b63bda482fb2bfb15ccc979e"
+        },
+        {
+          "path": "node-app/data/menu-board.png",
+          "bytes": 1480098,
+          "sha256": "4c0f653fe6357eb5cb68b27f2fb602344a1e7cf13eb2f03ce5a0793b0982b94b"
+        },
+        {
+          "path": "node-app/data/menu.json",
+          "bytes": 2494,
+          "sha256": "e3bdc3760fe4c4bb991a83d54f938c3b2f9f94943f9f277fdac2745ae943104b"
+        },
+        {
+          "path": "node-app/data/product-photos.json",
+          "bytes": 1548,
+          "sha256": "65404b058ed1dd68befb13f4681dc76c05231da44c712bffb8c60f7e210ef681"
+        },
+        {
+          "path": "node-app/data/product-photos.png",
+          "bytes": 1477127,
+          "sha256": "f58bc1a1449c7703a9c0f0b39427ba7bb2852d12a825136467bd84976e27ad71"
+        },
+        {
+          "path": "node-app/prisma/migrations/20261108000000_initial/migration.sql",
+          "bytes": 19093,
+          "sha256": "4ed744d65c29b191b2749656af247d951a2f325319070a4be7b99241026e6b7c"
+        },
+        {
+          "path": "node-app/prisma/migrations/20261110000000_customer_accounts/migration.sql",
+          "bytes": 580,
+          "sha256": "024e2629442126a8f6e7ebde7a96a812b5c555f71fa2743b55af91cde373852c"
+        },
+        {
+          "path": "node-app/prisma/migrations/20261110010000_customer_checkout/migration.sql",
+          "bytes": 834,
+          "sha256": "47bec5fdac384dbde04f4139c61a97c561cf0b1c550bae7031167d027e5e3ce4"
+        },
+        {
+          "path": "node-app/prisma/migrations/20261110020000_staff_registration/migration.sql",
+          "bytes": 85,
+          "sha256": "8cd954b99b99e9107ad7c1a1f2d70bca6fd8954e1606bb919466a6893400b297"
+        },
+        {
+          "path": "node-app/prisma/migrations/20261110030000_customer_support_chat/migration.sql",
+          "bytes": 1673,
+          "sha256": "af8794c5a5ea1431cae7ae4060b52a7014c1d3b8c111c02ab21eb7b46d199deb"
+        },
+        {
+          "path": "node-app/prisma/migrations/migration_lock.toml",
+          "bytes": 19,
+          "sha256": "00969ee045a3c3f087a3460235a1a744c1e35bde4441e0c55e163225eb077608"
+        },
+        {
+          "path": "node-app/prisma/schema.prisma",
+          "bytes": 18627,
+          "sha256": "f244657b8ce46ffd69f2c11ff0b02ffbf8dd9b614bc2d8431e411b96c20b8755"
+        },
+        {
+          "path": "node-app/scripts/backup.js",
+          "bytes": 5650,
+          "sha256": "f889210f0f467c6a31ffef5862f78aac77d9c1c2dd588ff15bd64ac7ef313b48"
+        },
+        {
+          "path": "node-app/scripts/check.js",
+          "bytes": 1009,
+          "sha256": "0e782e9db3ba71cff24a61d26b59d87ff910380cdf72a75cc13b5c50602d51e9"
+        },
+        {
+          "path": "node-app/scripts/create-admin.js",
+          "bytes": 2370,
+          "sha256": "b0d7da7ffea78261ef4fe8b7b59086f5d3366a7e0a0d68ee72de92c41483b808"
+        },
+        {
+          "path": "node-app/scripts/expand-menu.js",
+          "bytes": 8237,
+          "sha256": "0274cfdcd16c0160a285ed30405803fe31c01a80bcda3b2a80e35bb9144039f6"
+        },
+        {
+          "path": "node-app/scripts/generate-initial-migration.js",
+          "bytes": 4983,
+          "sha256": "cf8f40f7e1d90ab5ffda18462c66eae1dad3bf3e05fdde05cec7ab3a4b35408c"
+        },
+        {
+          "path": "node-app/scripts/import-legacy.js",
+          "bytes": 13640,
+          "sha256": "95846af54db0b7da1908476853e1e33ddd0cad1ecb1e7be743c5dcfb42cfba4a"
+        },
+        {
+          "path": "node-app/scripts/pizza-sizes.js",
+          "bytes": 2766,
+          "sha256": "16f37d12a77accca332c09078d658236cd8353248119f35f5b3be5a92b0e4a75"
+        },
+        {
+          "path": "node-app/scripts/schema-check.js",
+          "bytes": 2460,
+          "sha256": "240e59b5b633bacd68321b7876e29738ec031ebf990c5d8ff08e2193f3fee9ae"
+        },
+        {
+          "path": "node-app/scripts/seed-category-addons.js",
+          "bytes": 2057,
+          "sha256": "edd760a005bbd889423d31fc7e7df095a324e3523984af8c09641e3000e83840"
+        },
+        {
+          "path": "node-app/scripts/seed-menu.js",
+          "bytes": 3733,
+          "sha256": "f4ec1c065aaaa23de89f08cdb11cf8105b2a23c2dc7848d82e481cb7a3596f3f"
+        },
+        {
+          "path": "node-app/scripts/setup-local.js",
+          "bytes": 3432,
+          "sha256": "a59dcf5ff658fc70015b1ec6788262103d96607c0dfad1dec6b699be2b10afb0"
+        },
+        {
+          "path": "node-app/scripts/vapid.js",
+          "bytes": 709,
+          "sha256": "1c929dec7f63ce4d3e06e3a63bf541320d43d7840421bb39cea5c0f897da4af6"
+        },
+        {
+          "path": "node-app/server/app.js",
+          "bytes": 3724,
+          "sha256": "cbf97131bf9e80479aa59154ef033def0610114a29b186ec2570d73157a5c0d4"
+        },
+        {
+          "path": "node-app/server/config.js",
+          "bytes": 1146,
+          "sha256": "0e32994c7ec49a65786c6f9361477aa752069f72886e39cd296ff20b4a026fa3"
+        },
+        {
+          "path": "node-app/server/controllers/auth.js",
+          "bytes": 3843,
+          "sha256": "0f78dc2a930dd69bad09f039ed6f8887c5be1bc91d0bc0e6e26c5337d4760736"
+        },
+        {
+          "path": "node-app/server/controllers/documents.js",
+          "bytes": 9166,
+          "sha256": "4a38764a8f8f930c6868455fd06c85bf1dfcda06dd35e2edfe91f65075c2e504"
+        },
+        {
+          "path": "node-app/server/db.js",
+          "bytes": 194,
+          "sha256": "98daf46c2e985111953f4306626b43f76fa06774f516c1b7e7e49bb3a0953cdf"
+        },
+        {
+          "path": "node-app/server/index.js",
+          "bytes": 749,
+          "sha256": "a14d3c65dc3ede497ede2b753850e18c20f9a6aa292e3a70217b9f1ac1c038c6"
+        },
+        {
+          "path": "node-app/server/lib/atomic.js",
+          "bytes": 2514,
+          "sha256": "4646056cb7c2e4d9ddd73b76041181d61bd3bd3a99b1945f0c7e7cd81f1fcf78"
+        },
+        {
+          "path": "node-app/server/lib/backup-codec.js",
+          "bytes": 1530,
+          "sha256": "055f1851a82f301573cfc8795ffcb05f72475081a79e521642907f82d06a6ef7"
+        },
+        {
+          "path": "node-app/server/lib/errors.js",
+          "bytes": 1652,
+          "sha256": "bd4938c65f1cb601264ae595109a7c04ad02380d6370aeec24a9931f862d2e7b"
+        },
+        {
+          "path": "node-app/server/lib/password.js",
+          "bytes": 907,
+          "sha256": "0942b4f7375791c20b16c8bf84d33535bca864fc7a8b51c6a85e9f0598e257d0"
+        },
+        {
+          "path": "node-app/server/lib/permissions.js",
+          "bytes": 1334,
+          "sha256": "5958d4332821a69dd155950787deeaac47a3eb5b0637589e167367c5d72f2173"
+        },
+        {
+          "path": "node-app/server/lib/time.js",
+          "bytes": 1301,
+          "sha256": "8e05bd5af4c2a574e79f4948a7f27e6622404b9f9b64c7b37a0f148d542b3e46"
+        },
+        {
+          "path": "node-app/server/middleware/session.js",
+          "bytes": 3284,
+          "sha256": "a2873759a8c99415b2e2516b2502b381663ccc0663cc7f54bf82b131820afc11"
+        },
+        {
+          "path": "node-app/server/realtime.js",
+          "bytes": 3478,
+          "sha256": "7ff1482297c79a2b9cc53e988ce144c430a301e935c0d20084e7459074174948"
+        },
+        {
+          "path": "node-app/server/routes/api.js",
+          "bytes": 12518,
+          "sha256": "56e44cd4cd251b2725b07e0ed0fdd9db20657f4f9a58ff9b70e3b7a04caf162f"
+        },
+        {
+          "path": "node-app/server/routes/customer.js",
+          "bytes": 4622,
+          "sha256": "a6001ba401eda2d0e841c1e2b2a13f1b130cc580cf29a5c49b56287b007403a5"
+        },
+        {
+          "path": "node-app/server/routes/public.js",
+          "bytes": 2490,
+          "sha256": "b825be3a7f71ac194254d8138368ee04fb9fc4eed13f069c7542ee79ea498256"
+        },
+        {
+          "path": "node-app/server/services/chat.js",
+          "bytes": 5126,
+          "sha256": "76eb8d3b4d6f3b4178f56b03f83428098edd9c26140772b87a87a5dec651d19f"
+        },
+        {
+          "path": "node-app/server/services/customer-checkout.js",
+          "bytes": 3911,
+          "sha256": "9dc917ed5b95bb95295cd38a7854d11b31223db995b508b3b45d0df1b4b963bc"
+        },
+        {
+          "path": "node-app/server/services/menu.js",
+          "bytes": 8602,
+          "sha256": "7dc98c9b6bd533d03597942bd82ea7d4d685c1feb361cdbfe081bf7be2b105f8"
+        },
+        {
+          "path": "node-app/server/services/notifications.js",
+          "bytes": 6590,
+          "sha256": "a2d15530cbacd1cf7fe53cad3e201f3c2d14711e700adce0188ec0db1f75b907"
+        },
+        {
+          "path": "node-app/server/services/orders.js",
+          "bytes": 13493,
+          "sha256": "689ee415b03ad4aa07b3dfebe75bc72c4c3c12f0f5d3b253593e3c8af027c983"
+        },
+        {
+          "path": "node-app/server/services/payments.js",
+          "bytes": 10760,
+          "sha256": "fa59bb309f97d8aa1db6ab17ae96883299917bb9fb96bf936688a902ae581018"
+        },
+        {
+          "path": "node-app/server/services/reports.js",
+          "bytes": 11348,
+          "sha256": "7702cc4ebfc7a8aa6fe1cbfecb4316b4c45dead27b89a547af45537a99d79e59"
+        },
+        {
+          "path": "node-app/server/services/settings.js",
+          "bytes": 2071,
+          "sha256": "345e5a072476500ab1c8421d3a67420ec26763c278368943502adeb158a61da6"
+        },
+        {
+          "path": "node-app/server/services/staff.js",
+          "bytes": 6232,
+          "sha256": "54edac1b8ddd0df1589e3ff7595ad80b9044b4edc127aca4f1ab4fcbd7fe2d52"
+        },
+        {
+          "path": "node-app/server/services/support-chat.js",
+          "bytes": 3662,
+          "sha256": "a932c2ed1ff28bf8f7ecd5bf6dc61c95a817190003e8186299939449e3def571"
+        },
+        {
+          "path": "node-app/tests/calculation.test.js",
+          "bytes": 2932,
+          "sha256": "23b250d1044d5770fbb3ad573f546b353581fa83d4bb7a770eccd9b23440d932"
+        },
+        {
+          "path": "node-app/tests/integration.test.js",
+          "bytes": 33967,
+          "sha256": "9d4fd4f0642ca9011e6f0cff4c825fc84e59b66d02969c0acd7656783bdc724d"
+        },
+        {
+          "path": "node-app/tests/security.test.js",
+          "bytes": 3596,
+          "sha256": "ff6203268fdb79d6452278a32103f5008520acd3106c1234e84f605b7e74dc1d"
+        },
+        {
+          "path": "node-app/tests/staff-registration.test.js",
+          "bytes": 5985,
+          "sha256": "2a964eea7fff6cd549e6f7e2553d79768981b7a6c09801afe5704a5eada9bb51"
+        }
+      ]
+    },
+    "macky-branch": {
+      "author": "mackymagbanua33-source",
+      "email": "mackymagbanua33@gmail.com",
+      "files": [
+        {
+          "path": "node-app/public/css/app.css",
+          "bytes": 43089,
+          "sha256": "8c33e4df45e42bed3a26548ef82b0742483cfab2444f355a62e53323f86c1527"
+        },
+        {
+          "path": "node-app/public/css/landing.css",
+          "bytes": 21870,
+          "sha256": "fcdd689bbc07b60ca55dda598768d58e14f57ced3d66588b5d62379347e5a116"
+        },
+        {
+          "path": "node-app/public/css/print.css",
+          "bytes": 1423,
+          "sha256": "c24d83af4931a98706e25126d0f29ee781ec8902971592c976b3590d69987cdf"
+        },
+        {
+          "path": "node-app/public/customer.html",
+          "bytes": 520,
+          "sha256": "a8882c92fb5e3f6d92179687eedb35a50cc6d365c21d16e212207d42faf8403b"
+        },
+        {
+          "path": "node-app/public/icons/brand-logo.png",
+          "bytes": 1417178,
+          "sha256": "5e079bb2bce0e5ac8e4bdc6f3031d7f8d40701a8c43a309c10433e95efdca217"
+        },
+        {
+          "path": "node-app/public/icons/icon-192.png",
+          "bytes": 34855,
+          "sha256": "288b3dbf58ba5a8405d1ae548e569d421a5c374ea28c0dd72764f7018415acc6"
+        },
+        {
+          "path": "node-app/public/icons/icon-512.png",
+          "bytes": 179416,
+          "sha256": "9b48a60a5c21095a2c58f3299f120c953a138058d5d849c4722bc3519be9a0af"
+        },
+        {
+          "path": "node-app/public/icons/icon.svg",
+          "bytes": 485,
+          "sha256": "a452d3d097c1826cd7e7f421eb5c03152b780b657bc17cd75c915c7e5c8698bd"
+        },
+        {
+          "path": "node-app/public/images/burger.webp",
+          "bytes": 7346,
+          "sha256": "7e90fa0139d41863bcd6d5929845e8f6539567e8cb89a442d03e778ab7fca66a"
+        },
+        {
+          "path": "node-app/public/images/fries.webp",
+          "bytes": 7890,
+          "sha256": "53225ed37e09d65c77e7760d8e962b5ad2ddb4ec4508e2920b77f151fbadaf7f"
+        },
+        {
+          "path": "node-app/public/images/hero-food.png",
+          "bytes": 2139231,
+          "sha256": "3bae37f5a13c948059e7a1c1d20b82e237fa326a527f04a9d0e1dcaab30984e2"
+        },
+        {
+          "path": "node-app/public/images/hero-pizza-burger.png",
+          "bytes": 2341132,
+          "sha256": "b7b5e88f3d3412479904e7f1d27b545241506182601991bc39dc10095b96f2b8"
+        },
+        {
+          "path": "node-app/public/images/milk-tea.webp",
+          "bytes": 6738,
+          "sha256": "2a6e2eddedadbf2bc641debf9e9b0bf7b512bc8ea47c1f98e495d795d46b71ef"
+        },
+        {
+          "path": "node-app/public/index.html",
+          "bytes": 5677,
+          "sha256": "be9b6d3d5f6033ed8331885b11538391e91ad16b8cefe311259a20d200a1bba2"
+        },
+        {
+          "path": "node-app/public/js/api.js",
+          "bytes": 3298,
+          "sha256": "f2ca1c7db2bd77a603f2a029a95cbcfec34653d09c515b0413831495baefd0a1"
+        },
+        {
+          "path": "node-app/public/js/app.js",
+          "bytes": 26481,
+          "sha256": "24bedc719aa1dee57ed9252a26d2b82190b849c4de2728bcb75664e90fd09715"
+        },
+        {
+          "path": "node-app/public/js/customer.js",
+          "bytes": 5156,
+          "sha256": "18cb4e51a2341acebb8bf7552cebac573c19c80f1511c24efe893a6268f15200"
+        },
+        {
+          "path": "node-app/public/js/document.js",
+          "bytes": 929,
+          "sha256": "8eee0ea9e8e379be010633ae2a64b59c11a27ce3cc8613bbf6a4be0244d3571a"
+        },
+        {
+          "path": "node-app/public/js/landing.js",
+          "bytes": 5577,
+          "sha256": "9b004f42a01de90c7d02df7abeb4c7e390807fafbffe30bf3b96ad5cd988189f"
+        },
+        {
+          "path": "node-app/public/js/offline-store.js",
+          "bytes": 10940,
+          "sha256": "bcd61d4a961bc1687ac18bc040497573c6f5f184dcf9621ef749da90b6c84fbb"
+        },
+        {
+          "path": "node-app/public/js/pages/chat.js",
+          "bytes": 7567,
+          "sha256": "9c398d0789b42bd7ef7d2bbe78b58082c7736cdf1ac81ec79c08abdabff61ac7"
+        },
+        {
+          "path": "node-app/public/js/pages/dashboard.js",
+          "bytes": 6387,
+          "sha256": "619038c4a4eded6c6456d06cd4b6716cc464c6e94cccf22890a3be951059814e"
+        },
+        {
+          "path": "node-app/public/js/pages/management.js",
+          "bytes": 22384,
+          "sha256": "74afc0348c39e552f3985b2fb9e9bf1aa73670650f01c9cf9da74ffe0eab8aa0"
+        },
+        {
+          "path": "node-app/public/js/pages/notifications.js",
+          "bytes": 5961,
+          "sha256": "199c16d461e8f8ea6ab00aad0dbfcddb9b999fce853f1bc1c5365bc22709dd01"
+        },
+        {
+          "path": "node-app/public/js/pages/orders.js",
+          "bytes": 17626,
+          "sha256": "e6807487732717b764f16b1efadb0a641f6e9e6f1787d70f9906a11302e46e6a"
+        },
+        {
+          "path": "node-app/public/js/pages/payments.js",
+          "bytes": 3963,
+          "sha256": "f971d4c8f3b616a9d31eaf7c0f6aa4d4792f0f061fd194d6cd44ca77451e89ba"
+        },
+        {
+          "path": "node-app/public/js/pages/pos.js",
+          "bytes": 25966,
+          "sha256": "db32589690bc73d99049cfe515d83fbf591187b83c7d33df68a893eeb4e292c0"
+        },
+        {
+          "path": "node-app/public/js/pages/reports.js",
+          "bytes": 6679,
+          "sha256": "bb6405f75277ff178b5425ec11105a3cf61b1ff3281122a5e8744cb81a6732c4"
+        },
+        {
+          "path": "node-app/public/js/pages/settings.js",
+          "bytes": 5685,
+          "sha256": "26febe996e94b9ecae87fa5c33fad7f57d8366f930582959ea2f0e84e8b20530"
+        },
+        {
+          "path": "node-app/public/js/pwa.js",
+          "bytes": 2341,
+          "sha256": "c721a024fb9e3ac145b28072a833126a7519c49396fb0bdc90f6cddbabe345a9"
+        },
+        {
+          "path": "node-app/public/js/realtime.js",
+          "bytes": 1663,
+          "sha256": "9e832abd6b62ead8e4024e815d3d81519b0e36e4671b4f59d43a01ea57b75256"
+        },
+        {
+          "path": "node-app/public/js/storefront.js",
+          "bytes": 16654,
+          "sha256": "f1eee66f710bd690863bfd33914ab682be1c7b4e062cec966400aec6729b5e26"
+        },
+        {
+          "path": "node-app/public/js/support-chat.js",
+          "bytes": 8052,
+          "sha256": "955d545c88e6b5db0e60f11d8f3f5c57f4458694379e18b3382f9edde00ef64b"
+        },
+        {
+          "path": "node-app/public/js/ui.js",
+          "bytes": 8698,
+          "sha256": "a9e845733a23661ab5a4f07e8bd6ecb00b15e3e427c56754f12b98447e8b73bb"
+        },
+        {
+          "path": "node-app/public/manifest.webmanifest",
+          "bytes": 628,
+          "sha256": "f8f79064072db9adf39b670aebd436aa6ad47d67180ee88b0b1578e66f5249b1"
+        },
+        {
+          "path": "node-app/public/offline.html",
+          "bytes": 620,
+          "sha256": "354bd172ae9eb2d6dbd177695606f475bf8034e2c1feb49c039bcfab17538741"
+        },
+        {
+          "path": "node-app/public/shared/brand.js",
+          "bytes": 166,
+          "sha256": "69bc24668ccdd752a9a50ce053d4acfd7d66424d9a2d2377716a10d0ddb2eec6"
+        },
+        {
+          "path": "node-app/public/shared/calculation.js",
+          "bytes": 2629,
+          "sha256": "2d29588ea49b0d35dad30d9cc3c47b8fb5f35ef1ab292061ead1ea127ef01b6f"
+        },
+        {
+          "path": "node-app/public/staff.html",
+          "bytes": 1015,
+          "sha256": "47d4c384877e23190e9a6f5e28241010c547ff7403791088f07d20d5a2431402"
+        },
+        {
+          "path": "node-app/public/sw.js",
+          "bytes": 3786,
+          "sha256": "3b0843b7db3df42465caf19b3d968de42faba58d138c448414ba58a7bbf1ef9c"
+        },
+        {
+          "path": "node-app/scripts/browser-check.js",
+          "bytes": 34502,
+          "sha256": "53870aac450b0c61ce385404facabd2d91f4b88f273439583b9092a658968805"
+        },
+        {
+          "path": "node-app/scripts/build.js",
+          "bytes": 1559,
+          "sha256": "a867d1a34ce38e95f9dfeb6e8bf12242aac950bb8cc11959a0a574589f7dd4a7"
+        }
+      ]
+    },
+    "zyreen-branch": {
+      "author": "Zyreen-uni",
+      "email": "castillomzyreenmae@gmail.com",
+      "files": [
+        {
+          "path": ".editorconfig",
+          "bytes": 299,
+          "sha256": "0a021525e27574e5984103911346e5a3670a0e2bc2da0801c49685ae90386e94"
+        },
+        {
+          "path": ".gitattributes",
+          "bytes": 122,
+          "sha256": "bd37477d5098c53d244b69cacf844a6ce576087c6537a29713f897aa6b917048"
+        },
+        {
+          "path": ".gitignore",
+          "bytes": 238,
+          "sha256": "a69d59f747abcbf1a223ab90904db719202a696a927e30f3d7975bf52dc3b494"
+        },
+        {
+          "path": "docs/GITHUB_HANDOFF.md",
+          "bytes": 4109,
+          "sha256": "524250297ad26d63d0aada6012f9070126be2c73b1bf8d39e44948b6dce56c16"
+        },
+        {
+          "path": "node-app/.env.example",
+          "bytes": 615,
+          "sha256": "f3b7f9243ee63a1bbd854825e0aab7ec49bb1aa73e122e9ebc0eb2cbba0d7451"
+        },
+        {
+          "path": "node-app/.gitignore",
+          "bytes": 47,
+          "sha256": "e0f7784a42fdcca4c9059e274ddb11bf48dc2a6b7932986ca37116ba30c8700a"
+        },
+        {
+          "path": "node-app/docs/API.md",
+          "bytes": 11754,
+          "sha256": "1aa606f4b7b65ad6866337b5193becef6c048d9517121af46150a545fd778d29"
+        },
+        {
+          "path": "node-app/docs/GUIDE.md",
+          "bytes": 5247,
+          "sha256": "6db8dbf07c3375aecd636711fc56eda9df2f6deaa0050b0c5253605d0a2600a0"
+        },
+        {
+          "path": "node-app/docs/OPERATIONS.md",
+          "bytes": 7217,
+          "sha256": "04c6c1394c234417a92b2c6208be42b7170979666610e0cfab9a6605c270aee5"
+        },
+        {
+          "path": "node-app/docs/VERIFICATION.md",
+          "bytes": 9233,
+          "sha256": "c0470637f882e01ac367d10391dd9152719401042cf40902b757ff8b0a48c403"
+        },
+        {
+          "path": "node-app/package-lock.json",
+          "bytes": 105717,
+          "sha256": "4b601e24a98a0c5af8e503f6832b95531bde57bbc22ca35c4b64a208cbcf3486"
+        },
+        {
+          "path": "node-app/package.json",
+          "bytes": 1484,
+          "sha256": "3106063d8c48c2bf27053e375941eedb22e509075d26cba5a9bf5148a160ac91"
+        },
+        {
+          "path": "node-app/README.md",
+          "bytes": 17316,
+          "sha256": "991ea69462ef27e208fb532afdd50d718a595ac4ccb50c5ac86db09595e2dd09"
+        },
+        {
+          "path": "node-app/scripts/remove-legacy.ps1",
+          "bytes": 4603,
+          "sha256": "76e7813233bdfe5821c31bbfed4e4225bd33526690a366a7b931ed6d23dfe531"
+        },
+        {
+          "path": "package-lock.json",
+          "bytes": 263,
+          "sha256": "e05cb4ebe159b9b7bd5df5e0aa77edd27957d52bcf71e269fbe587e561612eb1"
+        },
+        {
+          "path": "package.json",
+          "bytes": 1227,
+          "sha256": "e505bb388a549d6888e8f52d4f9b937eac5c0609dbcbf28fa29cab9160adcff6"
+        },
+        {
+          "path": "README.md",
+          "bytes": 2050,
+          "sha256": "9e3d58cdff894827fa8305f63f355f92588006bbe5937a7a4fa2d79be299c62a"
+        }
+      ]
+    }
+  },
+  "branches": {
+    "main": "a9897b3",
+    "rainnier-branch": "29886fc",
+    "macky-branch": "667dfc8",
+    "zyreen-branch": "5c78d41"
+  }
+}

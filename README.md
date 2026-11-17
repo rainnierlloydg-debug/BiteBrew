@@ -38,7 +38,7 @@ The application uses **React, Node.js, Express, MySQL, and Prisma**. The fronten
 | --- | --- |
 | Public catalog | Product photos, categories, search, available options, prices, and demonstration labels |
 | Customer accounts | Registration/login, browser-local cart, add-ons, takeaway or scheduled pickup checkout, and staff messaging |
-| Staff accounts | Shared staff login, registration requests, owner approval, assigned roles, and password changes |
+| Staff accounts | Shared sign-in, administrator-created accounts, assigned roles, and password changes |
 | Point of sale | Variants, quantities, permitted add-ons, preparation notes, discounts, and server-validated quotes |
 | Kitchen | Preparation queue and permitted order-status updates |
 | Menu management | Products, categories, variants, prices, images, availability, and add-on assignments |
@@ -54,6 +54,7 @@ The application uses **React, Node.js, Express, MySQL, and Prisma**. The fronten
 | --- | --- |
 | Frontend | React 19, React DOM, HTML, and CSS |
 | Frontend build | esbuild; React is bundled locally without a CDN |
+| Interface icons | Locally hosted subset of Font Awesome Free 6.7.2 (Solid) |
 | Backend | Node.js and Express 5 |
 | Database | MySQL 8 and Prisma 6 |
 | Staff real-time communication | Socket.IO using WebSocket transport |
@@ -64,6 +65,8 @@ The application uses **React, Node.js, Express, MySQL, and Prisma**. The fronten
 React components for the landing page, catalog, and customer accounts are in `node-app/frontend/components/`. Existing staff controllers render React elements through `node-app/frontend/markup.jsx`, preserving their form bindings and workflows. Shared pricing calculations remain in `node-app/public/shared/`.
 
 PHP, Laravel, and Herd are not runtime requirements for this Node application.
+
+The displayed business name is **Bite & Brew** throughout the application. Startup automatically updates former business branding, the supplied special-pizza name, and supplied product images. Historical receipts show the current branding while their stored transaction amounts and order numbers remain intact. Run `npm.cmd run rebrand` to apply the same update separately. Existing database names and private browser/session identifiers are retained for compatibility.
 
 ## Requirements
 
@@ -160,9 +163,11 @@ Do not rerun `setup:local` or `import:legacy` as a routine startup step. Save pe
 
 | Page | URL | Purpose |
 | --- | --- | --- |
-| Storefront | <http://127.0.0.1:3000/> | Browse products, select options/add-ons, and manage the cart |
-| Staff workspace | <http://127.0.0.1:3000/staff.html> | Owner, cashier, and kitchen login |
-| Customer account | <http://127.0.0.1:3000/customer.html> | Customer registration/login and Chat with staff |
+| Homepage | <http://127.0.0.1:3000/> | System information, roles and order workflow |
+| Customer menu | <http://127.0.0.1:3000/menu.html> | Browse products, select options/add-ons, and manage the cart |
+| Shared sign-in | <http://127.0.0.1:3000/login.html> | One login for customers, owners, cashiers and kitchen staff |
+| Staff workspace | <http://127.0.0.1:3000/staff.html> | Role-based workspace after sign-in |
+| Customer account | <http://127.0.0.1:3000/customer.html> | Customer account and Chat with staff after sign-in |
 | Health check | <http://127.0.0.1:3000/health> | Application/database connectivity |
 
 | Role | Main responsibilities |
@@ -171,7 +176,7 @@ Do not rerun `setup:local` or `import:legacy` as a routine startup step. Save pe
 | Cashier | POS, customer/order handling, collections, scoped reports, and communication |
 | Kitchen | Preparation queue, permitted preparation updates, chat, and notifications |
 
-New staff select **Create staff account** on the staff login page. Accounts remain inactive until the owner reviews them in **Staff Management → Pending Approval** and assigns Cashier or Kitchen access.
+The administrator creates staff accounts in **Staff Management > Add Account**, assigns Owner, Cashier or Kitchen access, and provides the credentials to the staff member. New staff/admin accounts receive the default initial password automatically, so the administrator enters name and email and selects the role. Existing passwords are preserved. Public staff registration is disabled. Everyone signs in at **/login.html**; the system identifies the account and opens the correct workspace. Customers can still create customer accounts from this shared page.
 
 Customers use separate credentials. Guests can browse and build a cart, while checkout and customer chat require an active customer account. Customer order history is not currently included. Signing in as a different account rotates the session; use separate browser profiles for simultaneous staff and customer sessions.
 
@@ -259,13 +264,21 @@ Pending → Confirmed → Preparing → Ready → Completed
 
 Staff use general and order-linked conversations with authenticated WebSocket delivery and reconnect recovery. Customers select **Chat with staff** from their account page; staff reply through **Chat → Customer messages**. Each customer sees only their own conversation. Customer messages refresh every **4 seconds** while online. Chat is stored server-side and is not queued offline.
 
+In-app alerts, success/error messages, form validation and notifications use centered message boxes. Confirmations wait for Continue or Cancel before applying the action. Messages appear one at a time and can be acknowledged with the keyboard. Browser-controlled permissions and notifications while the app is closed use the browser's own interface.
+
 Open the app online once to download the permitted PWA shell and menu. Installation, service workers, and push require HTTPS or a loopback development origin.
+
+Signing in as an owner or cashier prepares the complete POS catalog automatically, even when you only open the dashboard. The workspace footer shows **Offline drafts ready** after the menu is saved. Use **Offline Drafts → New draft**, add items, and choose **Save draft** to keep the order on this device. Use **Queue** (or **Queue draft** in POS) to submit it automatically after reconnecting; **Sync Now** also retries queued drafts. Saved drafts and edits survive a page reload. If an edited estimate changes, accept the revised estimate before queueing.
 
 Offline draft states are **Local Draft, Queued, Syncing, Synced, and Needs Review**. Drafts have estimated totals and no official order number until accepted by the server. Price changes require review, unavailable selections need correction, and authentication expiry pauses synchronization.
 
 Payments, refunds, live reports, and official updates require connectivity. Drafts are device-local and are not a database backup. Save pending work before applying a PWA update.
 
 Web Push requires permission, configured VAPID keys, and outbound access to browser push services. In-app notifications remain available when push is unavailable.
+
+To enable browser push, sign in at the configured app address, open **Notifications**, choose **Enable / update push**, and allow the browser permission. The page checks both the browser subscription and its server registration before showing **Push is enabled on this browser**. Use **Send test notification** to send through the server delivery queue to this device. A successful test response means the push service accepted the message; browser/device settings still control its on-screen display. If permission is blocked, allow notifications in the site's browser permissions, then enable again. Keep the Node server running for queued push delivery, including while the browser tab is closed.
+
+Push subscriptions are scoped to this account, browser and origin. Unsubscribe removes this device without disabling other devices. Re-enabling renews a subscription if the server public key changed. Expired endpoints are removed, temporary delivery failures retry, and notification clicks open the relevant staff page without redirecting a customer tab.
 
 ## Project structure
 
@@ -359,7 +372,7 @@ Legacy import is optional and requires separately preserved source configuration
 | React packages/build tools missing | Run `npm.cmd --prefix node-app ci --include=dev` |
 | Port `3000` in use | Stop the other instance or change both `PORT` and `APP_ORIGIN` consistently |
 | Newly registered staff cannot log in | Owner approval and an assigned role are required |
-| Customer cannot use staff login | Use `/customer.html`; the account types are separate |
+| Sign-in opens the wrong account | Use `/login.html`; staff and customer accounts must use unique email addresses |
 | Session/security-token errors | Use the configured origin; sign in again and check for account switching in another tab |
 | Old screen after updating | Save pending work, apply the PWA update, and refresh with Ctrl+F5 |
 | Push/install unavailable on a LAN URL | Check HTTPS, browser support, installation requirements, and permission |
@@ -386,3 +399,12 @@ Legacy import is optional and requires separately preserved source configuration
 ## License
 
 A project license has not been specified in this repository.
+
+Interface icons use Font Awesome Free 6.7.2 by Fonticons, Inc., under CC BY 4.0. The local subset retains attribution; see [Font Awesome license](node-app/public/shared/fontawesome.LICENSE.txt).
+
+
+Customer email confirmation: Create Account sends a 6-digit confirmation code before creating the customer account. Codes last 10 minutes, allow five attempts and can be resent after 60 seconds. Existing accounts continue to use the shared login. Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS` and `SMTP_FROM` in `node-app/.env` (or this directory's `.env` when working inside node-app), then restart Node. Use port 465 with `SMTP_SECURE=true`, or port 587 with `SMTP_SECURE=false` for required STARTTLS. For Gmail, use `smtp.gmail.com` and a Google App Password for the sender account; do not use the normal account password or commit credentials. SMTP setup follows the [Nodemailer SMTP documentation](https://nodemailer.com/smtp). If email delivery is unavailable, registration shows an error and no account is created. Apply the customer verification migration with `npm run db:deploy` and regenerate Prisma before starting an updated installation.
+
+The homepage is an information page. Customer product browsing and cart checkout are available separately at `/menu.html`, linked from the customer account.
+
+Returning to the information homepage closes staff workspace access in that browser. Staff must sign in again before returning through Back/Forward, an old workspace URL or the offline shell. Saved drafts stay scoped to their original account and synchronization pauses until sign-in.

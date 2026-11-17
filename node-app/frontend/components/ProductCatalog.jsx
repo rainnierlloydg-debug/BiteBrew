@@ -1,21 +1,24 @@
+import { Icon } from './Icon.jsx';
 import React, { useEffect, useState } from 'react';
 import { addProductToCart, productDetails, productPicture } from '/js/storefront.js';
 import { money } from '/js/ui.js';
 import { Markup } from '../markup.jsx';
+import { showMessage } from '/shared/message-box.js';
 
 function ProductCard({ product }) {
   const [message, setMessage] = useState(''), [failed, setFailed] = useState(false);
   function quickAdd(event) {
     event.stopPropagation();
     if (product.variants.length !== 1 || product.variants[0].addons?.length) return productDetails(product);
-    try { addProductToCart(product, product.variants[0]); setMessage('Added to cart'); setFailed(false); }
-    catch (error) { setMessage(error.message); setFailed(true); }
+    try { addProductToCart(product, product.variants[0]); setMessage('Added to cart'); setFailed(false); showMessage('Added to cart', 'success'); }
+    catch (error) { setMessage(error.message); setFailed(true); showMessage(error.message, 'error'); }
   }
-  return <article className="menu-card" data-product={product.id} aria-label={'View ' + product.name + ' details'} onClick={() => productDetails(product)}><Markup html={productPicture(product)} /><div className="menu-caption"><span>{product.category.name}</span><h3><button className="product-title" type="button">{product.name}</button></h3>{product.demo && <span className="demo-label">Demonstration</span>}{product.description && <p>{product.description}</p>}<ul className="variant-prices">{product.variants.length ? product.variants.map(variant => <li key={variant.id}><span>{variant.name === 'Menu price (size unspecified)' ? 'Menu price' : variant.name}</span><strong>{money(variant.price)}</strong></li>) : <li>Currently unavailable</li>}</ul><div className="product-card-actions"><span className="product-details-link">View details &#8599;</span><button className="product-add" type="button" data-quick-add="" aria-label={'Add ' + product.name + ' to cart'} disabled={!product.variants.length} onClick={quickAdd}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button></div><p className={'product-add-message' + (failed ? ' error' : '')} role="status">{message}</p></div></article>;
+  return <article className="menu-card" data-product={product.id} aria-label={'View ' + product.name + ' details'} onClick={() => productDetails(product)}><Markup html={productPicture(product)} /><div className="menu-caption"><span>{product.category.name}</span><h3><button className="product-title" type="button">{product.name}</button></h3>{product.demo && <span className="demo-label">Demonstration</span>}{product.description && <p>{product.description}</p>}<ul className="variant-prices">{product.variants.length ? product.variants.map(variant => <li key={variant.id}><span>{variant.name === 'Menu price (size unspecified)' ? 'Menu price' : variant.name}</span><strong>{money(variant.price)}</strong></li>) : <li>Currently unavailable</li>}</ul><div className="product-card-actions"><span className="product-details-link">View details</span><button className="product-add" type="button" data-quick-add="" aria-label={'Add ' + product.name + ' to cart'} disabled={!product.variants.length} onClick={quickAdd}><Icon name="plus" size={20} /></button></div><p className={'product-add-message' + (failed ? ' error' : '')} role="status">{message}</p></div></article>;
 }
 export function ProductCatalog() {
   const [filters, setFilters] = useState({ q: '', categoryId: '', page: 1 });
   const [query, setQuery] = useState(''), [catalog, setCatalog] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState(null);
+  useEffect(() => { if (error) showMessage(error.message, 'error'); }, [error]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(null);
     (async () => {

@@ -7,3 +7,5 @@ export { renderMarkup, isReactRoot } from './markup.jsx';
 export { version as reactVersion };
 export function mountLanding() { renderComponent(document.querySelector('#landing-root'), <LandingPage />); }
 export function mountCustomer() { renderComponent(document.querySelector('#app'), <CustomerApp />); }
+
+export function mountMenu() { renderComponent(document.querySelector('#landing-root'), <LandingPage catalog />); }

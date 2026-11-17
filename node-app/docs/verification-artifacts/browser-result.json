@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-11-10T18:55:52.246Z",
+  "harness": "Isolated UI fixtures; no MySQL, push provider or actual WebSocket verification",
+  "passed": [
+    "React roots preserve editable form defaults, escaped text, nested views and unmount cleanup",
+    "Cart quantity buttons respect bounds, update totals and preserve items when continuing shopping",
+    "Category add-ons show prices, persist through login/reload, reach checkout and keep different combinations separate",
+    "Guest product details and cart persist through reload and customer registration; authenticated checkout places one order",
+    "Landing page loads artwork, fits desktop/mobile and links to customer/staff login",
+    "Customer chat fits mobile, sends messages, staff inbox replies and customer sees saved reply",
+    "Staff registration validates passwords, stays pending and is approved with an owner-assigned role"
+  ],
+  "errors": []
+}

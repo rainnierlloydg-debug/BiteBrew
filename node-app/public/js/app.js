@@ -1,3 +1,5 @@
+import { confirmMessage, showMessage, clearMessageBoxes } from '../shared/message-box.js';
+import { pushTarget } from '../shared/push-target.js';
 import { renderMarkup } from '/assets/react-runtime.js';
 import { api, operation, setCsrf, setAccount } from './api.js';
 import { activeUser, setActiveUser, cached, cacheData, listDrafts, clearPrivateData, syncDrafts } from './offline-store.js';
@@ -14,6 +16,7 @@ import * as chat from './pages/chat.js';
 import * as settings from './pages/settings.js';
 import * as notifications from './pages/notifications.js';
 
+import { isWorkspaceLocked, workspaceLocallyLocked, workspaceLockKey } from './workspace-session.js';
 import { BRAND } from '../shared/brand.js';
 const app = document.querySelector('#app');
 const navigation = [
@@ -24,7 +27,15 @@ const navigation = [
 ];
 const state = { user: null, bootstrap: null, sessionConfirmed: false, online: navigator.onLine, live: false, dirty: false };
 const filters = {};
-let sessionEpoch = 0;
+let sessionEpoch = 0, notificationOwner = null;
+const seenNotifications = new Set();
+function displayNotification(notification) {
+  if (!state.user) return;
+  if (notificationOwner !== state.user.id) { seenNotifications.clear(); notificationOwner = state.user.id; }
+  if (notification.id && seenNotifications.has(notification.id)) return;
+  if (notification.id) seenNotifications.add(notification.id);
+  showMessage(notification.body || 'There is a new update in your workspace.', 'info', notification.title || 'New notification');
+}
 let page, params = {}, generation = 0, cleanups = [], leaveWork = null, sidebarOpen = false, sidebarFocus = null, expiring = false, lastResume = 0;
 const can = permission => state.user?.permissions.includes(permission);
 const isDirty = () => state.dirty || Boolean(document.querySelector('dialog[data-dirty="true"]'));
@@ -39,12 +50,14 @@ async function updateSync() {
   if (!state.user || !can('pos')) return;
   const drafts = await listDrafts(state.user.id), count = drafts.filter(draft => draft.status !== 'SYNCED').length;
   document.querySelectorAll('[data-badge=drafts]').forEach(element => { element.textContent = count ? String(count) : ''; element.hidden = !count; });
-  const status = document.querySelector('[data-sync-status]'); if (status) status.textContent = count ? `${count} local draft${count === 1 ? '' : 's'} not accepted` : 'Drafts up to date';
+  const menu = await cached(state.user.id, 'catalog');
+  const status = document.querySelector('[data-sync-status]'); if (status) status.textContent = count ? `${count} local draft${count === 1 ? '' : 's'} not accepted` : menu ? 'Offline drafts ready' : 'Connect to prepare offline drafts';
 }
 async function updateBadges() {
   if (!state.user || !state.sessionConfirmed || !navigator.onLine) return;
   try {
-    const notification = await api('/notifications?unread=1&pageSize=1');
+    const notification = await api('/notifications?unread=1&pageSize=20');
+    for (const item of [...(notification.data || [])].reverse()) displayNotification(item);
     document.querySelectorAll('[data-badge=notifications]').forEach(element => { element.textContent = notification.unread || ''; element.hidden = !notification.unread; });
     if (can('chat')) { const rooms = await api('/chat/rooms?pageSize=100'); const unread = rooms.data.reduce((sum, room) => sum + room.unread, 0); document.querySelectorAll('[data-badge=chat]').forEach(element => { element.textContent = unread || ''; element.hidden = !unread; }); }
   } catch {}
@@ -55,10 +68,21 @@ async function refreshBootstrap() {
   try { const result = (await api('/bootstrap')).data; state.bootstrap = result; await cacheData(state.user.id, 'bootstrap', result); }
   catch (error) { const saved = await cached(state.user.id, 'bootstrap'); if (error.status !== 0 || !saved) throw error; state.bootstrap = saved.value; }
   document.querySelectorAll('[data-business-name]').forEach(element => { element.textContent = state.bootstrap.business.name; });
+  // Prepare the POS even when the owner only opens the dashboard before going offline.
+  if (can('pos') && state.sessionConfirmed && navigator.onLine) {
+    try { await cachedRequest('/catalog?pageSize=100', 'catalog'); }
+    catch (error) { if ([401, 419].includes(error.status)) throw error; }
+  }
 }
 async function cachedRequest(url, name, sanitize = value => value) {
   try {
-    requireOnline(); const result = await api(url); const safe = sanitize(result); await cacheData(state.user.id, name, safe); return { result, offline: false, syncedAt: new Date().toISOString() };
+    requireOnline(); let result = await api(url);
+    if (name === 'catalog') {
+      const products = [...result.data];
+      for (let page = 2; page <= result.meta.lastPage; page++) products.push(...(await api('/catalog?pageSize=100&page=' + page)).data);
+      result = { ...result, data: products, meta: { ...result.meta, page: 1, pageSize: products.length, lastPage: 1 } };
+    }
+    const safe = sanitize(result); await cacheData(state.user.id, name, safe); return { result, offline: false, syncedAt: new Date().toISOString() };
   } catch (error) {
     if (error.status && error.status !== 0) throw error;
     const saved = await cached(state.user.id, name); if (!saved) throw new Error('No permitted snapshot is saved on this device yet. Connect and open this page first.');
@@ -82,7 +106,7 @@ function renderShell() {
 async function renderPage() {
   if (!state.user) return;
   clearView(); const version = ++generation, host = app.querySelector('#page-content'); if (!host) return;
-  const root = document.createElement('div'); root.className = 'page'; host.replaceChildren(root); renderMarkup(root, '<div class="glass loading"><span class="spinner"></span><p>Loading your workspace...</p></div>');
+  const root = document.createElement('div'); root.className = 'page'; host.replaceChildren(root); renderMarkup(root, '<div class="glass loading">' + icon('spinner', 27) + '<p>Loading your workspace...</p></div>');
   const title = navigation.find(item => item[0] === page)?.[1] || page; document.querySelector('#breadcrumb-page').textContent = title;
   document.title = title + ' · ' + (state.bootstrap?.business.name || BRAND.name); app.querySelectorAll('.nav-item').forEach(button => { const active = button.dataset.nav === page; button.classList.toggle('active', active); if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
   const ctx = { state, filters, params, page, root, can, isDirty, requireOnline, go, refresh: renderPage, updateSync, updateBadges, refreshBootstrap, cachedRequest, active: () => version === generation, setDirty: value => { state.dirty = value; }, beforeLeave: fn => { leaveWork = fn; }, cleanup: fn => cleanups.push(fn), listen: (name, fn) => { window.addEventListener(name, fn); cleanups.push(() => window.removeEventListener(name, fn)); }, interval: (fn, ms) => { const timer = setInterval(fn, ms); cleanups.push(() => clearInterval(timer)); }, openOrder: id => orders.openOrder(ctx, id), snapshotNotice: (offline, syncedAt) => offline ? `<div class="notice offline"><strong>Offline · read-only snapshot / estimates</strong><br>Last synced ${e(new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(syncedAt)))}. Availability and amounts must be revalidated online.</div>` : '' };
@@ -94,7 +118,7 @@ async function go(target, options = {}) {
   const permission = navigation.find(item => item[0] === target)?.[3]; if (!can(permission)) { toast('This page is not permitted for your role.', 'error'); return; }
   if (page === target && !Object.keys(options).length) { closeSidebar(); return; }
   if (leaveWork) await leaveWork();
-  if (isDirty() && !confirm('Discard the unsaved changes on this page?')) return;
+  if (isDirty() && !(await confirmMessage('Discard the unsaved changes on this page?'))) return;
   state.dirty = false; page = target; params = options; closeSidebar();
   history.replaceState(null, '', '/staff.html?' + new URLSearchParams({ page: target, ...(options.order ? { order: options.order } : {}) })); window.scrollTo(0, 0); await renderPage();
 }
@@ -102,74 +126,73 @@ async function sessionExpired() {
   if (expiring || !state.user) return; expiring = true; sessionEpoch++;
   try { if (leaveWork) await leaveWork(); } catch {}
   state.sessionConfirmed = false; state.live = false; disconnectRealtime(); generation++; clearView();
-  for (const dialog of document.querySelectorAll('dialog')) dialog.remove();
-  state.user = null; setAccount(null); state.dirty = false; renderLogin('Your session expired or account changed. Local drafts are retained. Sign in to resume.'); expiring = false;
+  for (const dialog of document.querySelectorAll('dialog:not(.message-box)')) dialog.remove();
+  clearMessageBoxes(); state.user = null; setAccount(null); state.dirty = false; renderLogin('Your session expired or account changed. Local drafts are retained. Sign in to resume.'); expiring = false;
 }
 async function renderLogin(message = '') {
-  renderMarkup(app, `<main class="login-layout"><section class="login-story"><div class="brand"><img src="/icons/brand-logo.png" alt="" width="48" height="48"><div><strong>Bite &amp; Brew</strong><small>ORDER & SALES MANAGEMENT</small></div></div><div><p class="eyebrow">YOUR DAILY WORKSPACE</p><h1>Good bites.<br>Better sips.</h1><p>Pizza, burgers, milk tea and fries - orders, kitchen preparation and sales in one workspace.</p><div class="login-art">${icon('drink', 155)}</div></div><footer>Poblacion 1, Victoria, Oriental Mindoro<br>0985 986 4399 · 7:00 AM–8:00 PM</footer></section><section class="glass login-card"><a class="login-back-home" href="/">&#8592; Back to home</a><span class="badge">ADMIN &amp; STAFF ACCESS</span><h2>Welcome back.</h2><p>Admins and staff sign in here using their assigned accounts.</p>${message ? `<div class="notice">${e(message)}</div>` : ''}<form id="login-form">${field('Email address', input('email', '', 'type="email" required autocomplete="username" maxlength="190"'))}${field('Password', input('password', '', 'type="password" required autocomplete="current-password" maxlength="128"'))}<div data-error></div><button class="wide">Sign in ${icon('arrow', 16)}</button></form><p class="login-help">New staff? <button type="button" class="text-button" data-register-staff>Create staff account</button><br>Already registered? Wait for admin approval. For a password reset, contact the owner.</p><p class="login-help">Customer? <a href="/customer.html">Go to customer sign in</a></p><button class="text-button" data-install>Install app / Help</button></section></main>`);
-  app.querySelector('[data-install]').onclick = installApp;
-  app.querySelector('[data-register-staff]').onclick = registerStaff;
-  try { await api('/session', { authEvent: false }); } catch {}
-  const form = app.querySelector('#login-form'); if (!form) return;
-  form.onsubmit = async event => { event.preventDefault(); const button = form.querySelector('button'); button.disabled = true;
-    try {
-      if (!navigator.onLine) throw new Error('Authentication requires connectivity. Reconnect to sign in.');
-      sessionEpoch++; const session = (await api('/login', { method: 'POST', data: Object.fromEntries(new FormData(form)), authEvent: false })).data;
-      const previous = await activeUser();
-      if (previous && previous.id !== session.user.id) { const pending = (await listDrafts(previous.id)).filter(draft => draft.status !== 'SYNCED'); if (pending.length && !confirm(`Switching accounts clears ${pending.length} unsynchronized draft(s) belonging to the previous account. Continue?`)) { await api('/logout', { method: 'POST', data: {} }); throw new Error('Previous drafts retained. Sign in to the original account to resume them.'); } await clearPrivateData(previous.id); }
-      state.user = session.user; setAccount(session.user.id); state.sessionConfirmed = true; state.online = true; await setActiveUser(session.user); for (const key of Object.keys(filters)) delete filters[key];
-      await refreshBootstrap(); renderShell(); const requested = new URLSearchParams(location.search).get('page'); page = navigation.find(item => item[0] === requested && can(item[3]))?.[0] || navigation.find(item => can(item[3]))[0]; params = {}; await renderPage(); connectRealtime(pwaContext); syncDrafts().then(updateSync).catch(() => {});
-    } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); } finally { button.disabled = false; }
-  };
+  if (message) { try { sessionStorage.setItem('bite-brew-login-notice', message); } catch {} }
+  location.replace('/login.html');
 }
-function registerStaff() {
-  modal('Create staff account', `<p>Submit your details for admin approval. You can sign in after the owner approves your account.</p><form id="staff-registration-form"><div class="form-grid">${field('Full name', input('name', '', 'required maxlength="120" autocomplete="name"'))}${field('Email address', input('email', '', 'type="email" required maxlength="190" autocomplete="username"'))}${field('Password', input('password', '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"'))}${field('Confirm password', input('confirmPassword', '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"'))}</div><p>Use at least 12 characters for your password. The owner assigns your role when approving your account.</p><div data-error role="alert"></div><div class="form-actions"><button type="button" class="secondary" data-cancel>Cancel</button><button>Submit registration</button></div></form>`, (dialog, close) => {
-    const form = dialog.querySelector('form'); form.querySelector('[data-cancel]').onclick = () => close();
-    form.onsubmit = async event => {
-      event.preventDefault(); const button = form.querySelector('button:not([type=button])'); button.disabled = true;
-      try {
-        const values = Object.fromEntries(new FormData(form));
-        if (values.password !== values.confirmPassword) throw new Error('Passwords do not match.');
-        delete values.confirmPassword;
-        await api('/session', { authEvent: false });
-        const result = await api('/staff/register', { method: 'POST', data: values, authEvent: false });
-        close(true); await renderLogin(result.data.message);
-      } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); }
-      finally { button.disabled = false; }
-    };
-  });
-}
+let signingOut = false;
 async function logout() {
+  if (signingOut || !state.user) return;
+  signingOut = true;
   try {
     requireOnline(); if (leaveWork) await leaveWork();
     const drafts = await listDrafts(state.user.id), pending = drafts.filter(draft => draft.status !== 'SYNCED');
     if (pending.some(draft => draft.status === 'SYNCING')) throw new Error('Wait for the active synchronization to finish before signing out.');
-    if ((pending.length || isDirty()) && !confirm(`Sign out and clear private data on this device? ${pending.length} unsynchronized draft(s) would be lost.`)) return;
+    const warning = pending.length ? `\n\n${pending.length} unsynchronized draft(s) on this device will be cleared.` : isDirty() ? '\n\nUnsaved changes will be discarded.' : '';
+    if (!(await confirmMessage('Are you sure you want to sign out?' + warning, { title: 'Sign out?', confirmLabel: 'Sign out', cancelLabel: 'Cancel' }))) return;
     sessionEpoch++; const registration = getRegistration(); const subscription = await registration?.pushManager?.getSubscription(); if (subscription) await subscription.unsubscribe().catch(() => {});
     const push = await cached(state.user.id, 'push'); if (push?.value.id) await api('/push/subscriptions/' + push.value.id, { method: 'DELETE' });
-    await api('/logout', { method: 'POST', data: {} }); await clearPrivateData(state.user.id); disconnectRealtime(); generation++; clearView(); state.user = null; setAccount(null); state.sessionConfirmed = false; state.dirty = false; setCsrf(null); for (const dialog of document.querySelectorAll('dialog')) dialog.remove(); await renderLogin('You have been signed out. Private local data was cleared.');
-  } catch (error) { toast(error.message, 'error'); }
+    await api('/logout', { method: 'POST', data: {} }); await clearPrivateData(state.user.id); clearMessageBoxes(); disconnectRealtime(); generation++; clearView(); state.user = null; setAccount(null); state.sessionConfirmed = false; state.dirty = false; setCsrf(null); for (const dialog of document.querySelectorAll('dialog:not(.message-box)')) dialog.remove(); await renderLogin();
+  } catch (error) { toast(error.message, 'error'); } finally { signingOut = false; }
 }
 function changePassword() {
   try { requireOnline(); const submit = operation(); modal('Change password', `<form>${field('Current password', input('currentPassword', '', 'type="password" required autocomplete="current-password"'))}${field('New password', input('password', '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"'))}<div data-error></div><button>Change password</button></form>`, (dialog, close) => { const form = dialog.querySelector('form'); form.onsubmit = async event => { event.preventDefault(); const button = form.querySelector('button'); button.disabled = true; try { await submit('/password', Object.fromEntries(new FormData(form))); close(true); await resume(); toast('Password changed. Other sessions were signed out.'); } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); } finally { button.disabled = false; } }; }); } catch (error) { toast(error.message, 'error'); }
 }
 async function resume() {
+  if (await isWorkspaceLocked()) { blockWorkspace(); return; }
   const epoch = sessionEpoch;
   if (!state.user || !navigator.onLine) { updateConnection(); return; }
   try { const session = (await api('/session', { authEvent: false })).data; if (epoch !== sessionEpoch) return; if (!session.user || session.user.id !== state.user.id) return sessionExpired(); state.sessionConfirmed = true; state.user = session.user; setAccount(session.user.id); await setActiveUser(session.user, true); if (epoch !== sessionEpoch) return; await refreshBootstrap(); await connectRealtime(pwaContext); await syncDrafts(); updateConnection(); updateSync(); updateBadges(); } catch (error) { if (error.status === 401) sessionExpired(); else { state.live = false; updateConnection(); } }
 }
 const pwaContext = { state, isDirty, sessionExpired, updateSync, updateConnection };
+function blockWorkspace() {
+  app.hidden = true; document.body.style.visibility = 'hidden'; sessionEpoch++; generation++; state.sessionConfirmed = false;
+  state.user = null; state.dirty = false; setAccount(null); disconnectRealtime(); clearView();
+  clearMessageBoxes(); location.replace('/login.html');
+}
+window.addEventListener('pagehide', () => { app.hidden = true; document.body.style.visibility = 'hidden'; });
+window.addEventListener('pageshow', async event => {
+  if (!event.persisted) return;
+  app.hidden = true; document.body.style.visibility = 'hidden';
+  try {
+    if (await isWorkspaceLocked()) { blockWorkspace(); return; }
+    const session = (await api('/session', { authEvent: false })).data;
+    if (!session.user || session.user.id !== state.user?.id) { blockWorkspace(); return; }
+    await resume(); if (state.user && !workspaceLocallyLocked()) { app.hidden = false; document.body.style.visibility = ''; }
+  } catch { blockWorkspace(); }
+});
+window.addEventListener('storage', event => { if (event.key === workspaceLockKey && event.newValue !== null) blockWorkspace(); });
 window.addEventListener('auth-expired', sessionExpired);
 window.addEventListener('offline', () => { state.online = false; state.live = false; updateConnection(); });
 window.addEventListener('online', async () => { state.online = true; await resume(); if (state.user && !isDirty() && !['pos', 'chat'].includes(page)) renderPage(); });
 window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastResume > 10000) { lastResume = Date.now(); resume(); } });
 window.addEventListener('server-change', () => updateBadges());
+window.addEventListener('workspace-notification', event => displayNotification(event.detail));
+window.addEventListener('open-push-notification', event => {
+  const url = new URL(pushTarget(event.detail?.url, location.origin), location.origin);
+  if (!state.user) { history.replaceState(null, '', url.pathname + url.search); return; }
+  go(url.searchParams.get('page'), { ...(url.searchParams.get('order') ? { order: url.searchParams.get('order') } : {}) }).catch(error => toast(error.message, 'error'));
+});
 window.addEventListener('draft-sync', () => updateSync());
 window.addEventListener('beforeunload', event => { if (isDirty()) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('resize', () => { const sidebar = document.querySelector('#sidebar'); if (!sidebar) return; if (innerWidth > 900) { closeSidebar(); sidebar.inert = false; sidebar.removeAttribute('aria-hidden'); } else if (!sidebarOpen) { sidebar.inert = true; sidebar.setAttribute('aria-hidden', 'true'); } });
 window.addEventListener('keydown', event => { if (!sidebarOpen || document.querySelector('dialog[open]')) return; if (event.key === 'Escape') closeSidebar(); if (event.key === 'Tab') { const elements = [...document.querySelectorAll('#sidebar button,#sidebar a[href]')], first = elements[0], last = elements.at(-1); if (event.shiftKey && document.activeElement === first) { last.focus(); event.preventDefault(); } else if (!event.shiftKey && document.activeElement === last) { first.focus(); event.preventDefault(); } } });
 setInterval(() => { if (state.user && navigator.onLine) { updateBadges(); if (can('pos')) syncDrafts().then(updateSync).catch(() => {}); } }, 30000);
 async function start() {
+  if (await isWorkspaceLocked()) { blockWorkspace(); return; }
   try {
     const session = (await api('/session', { authEvent: false })).data;
     if (!session.user) { await renderLogin(); setupPwa(pwaContext); return; }

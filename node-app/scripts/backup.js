@@ -25,7 +25,7 @@ try {
     for (const item of await fs.readdir(config.uploads, { withFileTypes: true })) { if (!item.isFile() || !/^[a-zA-Z0-9._-]+$/.test(item.name)) continue; const bytes = await fs.readFile(path.join(config.uploads, item.name)); files.push({ name: item.name, data: bytes.toString('base64'), hash: hash(bytes) }); }
     const value = { version: 2, schemaHash: hash(schema), createdAt: new Date().toISOString(), timezone: 'UTC', tables, files };
     if (Buffer.byteLength(JSON.stringify(value)) > 200 * 1024 * 1024) throw new Error('Use mysqldump and a filesystem snapshot for backups above 200 MB.');
-    const destination = path.resolve(root, argument || 'var/backups/ellas-' + new Date().toISOString().replaceAll(':', '-') + '.epbackup');
+    const destination = path.resolve(root, argument || 'var/backups/bite-brew-' + new Date().toISOString().replaceAll(':', '-') + '.epbackup');
     await fs.mkdir(path.dirname(destination), { recursive: true }); await fs.writeFile(destination, encodeBackup(value, passphrase), { mode: 0o600, flag: 'wx' });
     console.log('Encrypted backup saved:', destination); console.log('Includes business tables and uploaded media; active sessions and environment secrets are excluded.');
   } else {

@@ -1,0 +1,15 @@
+.message-box{box-sizing:border-box;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;margin:auto;padding:30px 28px 24px;border:1px solid #f0ded6;border-top:3px solid #c73e43;border-radius:18px;background:#ffffff;color:#302a29;box-shadow:0 20px 70px #20282f26;text-align:center;font-family:Inter,"Segoe UI",system-ui,sans-serif}
+.message-box::backdrop{background:#20282f99;backdrop-filter:blur(3px)}
+.message-box-symbol{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 18px;border-radius:50%;background:#fff0dc;color:#b6373d;font-size:30px;font-weight:800;line-height:1}
+.message-box h2{margin:0 0 12px;color:#302a29;font-size:21px;line-height:1.35;letter-spacing:-.5px}
+.message-box p{margin:0;color:#796962;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere}
+.message-box-actions{display:flex;justify-content:center;gap:10px;margin-top:25px}
+.message-box-actions button{display:inline-flex;align-items:center;justify-content:center;min-width:100px;min-height:44px;padding:10px 20px;border:1px solid #c73e43;border-radius:9px;background:#c73e43;color:#fff;font:700 13px "Segoe UI",system-ui,sans-serif;cursor:pointer}
+.message-box-actions button:hover{background:#a62e35}
+.message-box-actions button:focus-visible{outline:3px solid #b07700;outline-offset:3px}
+.message-box-actions .message-box-cancel{background:#fff;color:#b6373d;border-color:#e5c5bb}
+.message-box-actions .message-box-cancel:hover{background:#fff0dc}
+.message-box-error .message-box-symbol{background:#ffebe8;color:#a62e35}
+.message-box-success .message-box-symbol{background:#fff0dc;color:#746044}
+@media(max-width:480px){.message-box{padding:25px 20px 20px}.message-box-actions button{flex:1;min-width:0}}
+@media print{.message-box{display:none!important}}

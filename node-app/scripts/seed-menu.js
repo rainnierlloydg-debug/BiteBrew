@@ -6,7 +6,9 @@ import { root, config } from '../server/config.js';
 import { audit } from '../server/lib/atomic.js';
 import { expandMenu } from './expand-menu.js';
 import { seedCategoryAddons } from './seed-category-addons.js';
+import { applyBranding } from '../server/services/branding.js';
 export async function seedMenu() {
+  await applyBranding();
   const owner = await db.user.findFirst({ where: { role: 'OWNER', active: true, archivedAt: null }, orderBy: { createdAt: 'asc' } });
   if (!owner) throw new Error('Create an owner account before importing the supplied menu.');
   const menu = JSON.parse(await fs.readFile(path.join(root, 'data/menu.json'), 'utf8')), photos = JSON.parse(await fs.readFile(path.join(root, 'data/product-photos.json'), 'utf8'));

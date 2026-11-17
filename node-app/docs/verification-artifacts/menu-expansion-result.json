@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-11-08T06:04:51.003Z",
+  "systemName": "Bite & Brew Order and Sales Management System",
+  "milkTeaProducts": 6,
+  "friesProducts": 4,
+  "variantsPerProduct": 2,
+  "demoPricing": true,
+  "databasePersistenceVerified": true,
+  "testsPassed": 28,
+  "testsFailed": 0,
+  "testsSkipped": 0,
+  "historicalSnapshotsPreserved": true
+}

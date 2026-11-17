@@ -15,7 +15,7 @@
 | General / permitted order chat | Yes | Yes | Confirmed order rooms |
 | In-app / browser notifications | Role-scoped | Role-scoped | Role-scoped |
 
-Owners create staff accounts; there is no public staff registration. Deactivation, archiving, password resets and role changes invalidate existing account sessions and sockets. Keep at least one active owner. Use the profile button to change your own password with current-password confirmation.
+Owners create staff accounts by entering name and email and selecting the role. The default initial password is applied automatically for staff/admin accounts. Existing passwords remain unchanged. There is no public staff registration. Deactivation, archiving, password resets and role changes invalidate existing account sessions and sockets. Keep at least one active owner. Use the profile button to change your own password with current-password confirmation.
 
 Walk-in orders need no registration. Optional customer profiles can be linked for repeat business; archiving a profile preserves historical order snapshots. For Pickup, provide a name and future pickup time. Dine-In requires a table number. Contact information is optional.
 
@@ -42,3 +42,6 @@ Use an isolated `_test` database and new browser profile. Do not create fabricat
 15. Create an encrypted backup and restore it into a separate empty `_restore` database. Compare tables/media and financial totals, and repeat sign-in after sessions are invalidated.
 
 Record browser/version, test database name (no credentials), test date, evidence and failures. See [verification](VERIFICATION.md); unchecked steps must not be presented as passed.
+
+
+In Staff Chat, use the trash button beside a conversation and confirm Delete Conversation. Cancel keeps it unchanged. Deletion applies to your view and survives refresh. A new message brings the conversation back with only messages sent after you deleted it. Use Open general staff room if the list is empty, or reopen an order conversation from the order. Other staff keep their history and order records are preserved.

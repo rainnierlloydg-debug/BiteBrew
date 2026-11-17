@@ -25,6 +25,7 @@
     "restore": "npm --prefix node-app run restore",
     "test:browser": "npm --prefix node-app run test:browser",
     "test:schema": "npm --prefix node-app run test:schema",
-    "menu:expand": "npm --prefix node-app run menu:expand"
+    "menu:expand": "npm --prefix node-app run menu:expand",
+    "rebrand": "npm --prefix node-app run rebrand"
   }
 }

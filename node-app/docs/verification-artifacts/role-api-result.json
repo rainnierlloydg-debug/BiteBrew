@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-11-08T05:44:26.364Z",
+  "tests": 27,
+  "passed": 27,
+  "failed": 0,
+  "skipped": 0,
+  "database": "Dedicated MySQL test database",
+  "verified": [
+    "Kitchen has only kitchen/chat/notification module permissions",
+    "Kitchen cannot open owner/cashier financial or management endpoints",
+    "Kitchen cannot confirm, complete or cancel orders",
+    "Cashier cannot change menu, staff, settings or archives or approve refunds",
+    "Kitchen order data omits prices and payments",
+    "Owner can manage staff/menu and authorize refunds",
+    "Account deactivation disconnects API and WebSocket sessions"
+  ],
+  "businessRecordsModified": false
+}

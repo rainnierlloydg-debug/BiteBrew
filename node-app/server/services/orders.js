@@ -6,6 +6,7 @@ import { fail } from '../lib/errors.js';
 import { authorize, authorizeOrderStatus } from '../lib/permissions.js';
 import { localDate, pagination, pageResult } from '../lib/time.js';
 import { settings } from './settings.js';
+import { brandText, brandBusiness } from '../../public/shared/brand.js';
 import { changed, notify } from './notifications.js';
 import { calculate, quoteMaterial, cents } from '../../public/shared/calculation.js';
 
@@ -35,7 +36,7 @@ export async function priceOrder(tx, actor, data) {
     if (new Set(line.addons).size !== line.addons.length) fail(422, 'ADDONS', 'Each add-on may be selected only once per item.');
     const addons = line.addons.map(id => variant.addons.find(link => link.addonId === id)?.addon);
     if (addons.some(addon => !addon?.active)) { conflicts.push({ variantId: line.variantId, reason: 'An add-on is unavailable or no longer applies to this variant' }); continue; }
-    items.push({ variantId: variant.id, name: variant.product.name, variantName: variant.name, basePrice: String(variant.price), quantity: line.quantity, addons: addons.map(a => ({ id: a.id, name: a.name, price: String(a.price) })), instructions: line.instructions });
+    items.push({ variantId: variant.id, name: brandText(variant.product.name), variantName: variant.name, basePrice: String(variant.price), quantity: line.quantity, addons: addons.map(a => ({ id: a.id, name: a.name, price: String(a.price) })), instructions: line.instructions });
   }
   if (conflicts.length) fail(409, 'MENU_CONFLICT', 'Some selections are no longer available. Review the draft before submitting.', { conflicts });
   let quote;
@@ -48,6 +49,8 @@ const orderIncludes = { items: { where: { removedAt: null } }, history: { includ
 export async function orderView(tx, id, actor) {
   const order = await tx.order.findUnique({ where: { id }, include: orderIncludes });
   if (!order) fail(404, 'NOT_FOUND', 'Order not found.');
+  order.businessSnapshot = brandBusiness(order.businessSnapshot);
+  order.items = order.items.map(item => ({ ...item, name: brandText(item.name) }));
   if (actor.role === 'KITCHEN') {
     if (!order.confirmedAt) fail(403, 'FORBIDDEN', 'This order is not in the kitchen workflow.');
     return { id: order.id, number: order.number, businessName: order.businessSnapshot.name, type: order.type, status: order.status, version: order.version, tableNumber: order.tableNumber, pickupAt: order.pickupAt, instructions: order.instructions, confirmedAt: order.confirmedAt, preparingAt: order.preparingAt, createdAt: order.createdAt, items: order.items.map(item => ({ id: item.id, name: item.name, variantName: item.variantName, quantity: item.quantity, addons: item.addons.map(a => ({ name: a.name })), instructions: item.instructions })), history: order.history.map(history => ({ from: history.from, to: history.to, reason: history.reason, createdAt: history.createdAt, actor: history.actor })) };

@@ -18,7 +18,7 @@ function elementNode(node, key) {
   for (const attribute of node.attributes) {
     if (/^on/i.test(attribute.name)) continue;
     let name = names[attribute.name] || attribute.name;
-    if (node.namespaceURI === 'http://www.w3.org/2000/svg') name = name.replace(/[-:]([a-z])/g, (_, letter) => letter.toUpperCase());
+    if (node.namespaceURI === 'http://www.w3.org/2000/svg' && !/^(data|aria)-/.test(name)) name = name.replace(/[-:]([a-z])/g, (_, letter) => letter.toUpperCase());
     if (name === 'style') props.style = styleProps(node);
     else if (name === 'checked') props.defaultChecked = true;
     else if (name === 'value' && tag === 'input' && node.type !== 'file') props.defaultValue = attribute.value;

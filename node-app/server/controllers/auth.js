@@ -8,32 +8,38 @@ import { fail } from '../lib/errors.js';
 import { audit } from '../lib/atomic.js';
 
 const dummy = await hashPassword(randomUUID());
-export async function registerStaff(req) {
-  const data = z.object({ name: z.string().trim().min(1).max(120), email: z.email().max(190), password: z.string().min(12).max(128) }).strict().parse(req.body);
-  const passwordHash = await hashPassword(data.password);
-  try { await db.user.create({ data: { name: data.name, email: data.email.toLowerCase().trim(), passwordHash, role: 'CASHIER', active: false, registrationPending: true } }); }
-  catch (error) { if (error.code !== 'P2002') throw error; }
-  return { message: 'Your staff registration request has been submitted. Wait for admin approval before signing in. If this email is already registered, contact the owner for assistance.' };
-}
+export const safeCustomer = account => ({ id: account.id, name: account.customer.name, email: account.email });
+export const accountDestination = user => user.role === 'KITCHEN' ? '/staff.html?page=kitchen' : user.role === 'CASHIER' ? '/staff.html?page=pos' : '/staff.html?page=dashboard';
 export async function sessionInfo(req) {
   const user = req.session.userId ? await db.user.findUnique({ where: { id: req.session.userId } }) : null;
-  if (user && (!user.active || user.registrationPending || user.archivedAt || user.authVersion !== req.session.authVersion)) {
-    await regenerateSession(req); return { user: null, csrf: csrfToken(req) };
+  if (req.session.userId && (!user || !user.active || user.registrationPending || user.archivedAt || user.authVersion !== req.session.authVersion)) {
+    await regenerateSession(req); const csrf = csrfToken(req); await saveSession(req); return { user: null, customer: null, csrf };
   }
-  const result = { user: user ? safeUser(user) : null, csrf: csrfToken(req) };
+  let account = req.session.customerAccountId ? await db.customerAccount.findUnique({ where: { id: req.session.customerAccountId }, include: { customer: true } }) : null;
+  if (req.session.customerAccountId && (!account || !account.customer.active || account.customer.archivedAt)) { delete req.session.customerAccountId; account = null; }
+  const result = { user: user ? safeUser(user) : null, customer: account ? safeCustomer(account) : null, csrf: csrfToken(req), ...(user ? { accountType: user.role, redirectTo: accountDestination(user) } : account ? { accountType: 'CUSTOMER', redirectTo: '/customer.html' } : {}) };
   await saveSession(req); return result;
 }
 export async function login(req) {
-  const data = z.object({ email: z.email().max(190), password: z.string().min(1).max(128) }).strict().parse(req.body);
-  const user = await db.user.findUnique({ where: { email: data.email.toLowerCase().trim() } });
-  const valid = await verifyPassword(data.password, user?.passwordHash || dummy);
-  if (!valid || !user?.active || user.registrationPending || user.archivedAt) fail(401, 'LOGIN_FAILED', 'The credentials are incorrect or the account is unavailable.');
-  const current = await db.user.findUnique({ where: { id: user.id } });
-  if (!current.active || current.registrationPending || current.archivedAt || current.authVersion !== user.authVersion) fail(401, 'LOGIN_FAILED', 'The account is unavailable.');
-  await regenerateSession(req);
-  req.session.userId = user.id; req.session.authVersion = user.authVersion;
-  const token = csrfToken(req); await saveSession(req);
-  return { user: safeUser(user), csrf: token };
+  const data = z.object({ email: z.string().trim().max(190).pipe(z.email()), password: z.string().min(1).max(128) }).strict().parse(req.body);
+  const email = data.email.toLowerCase();
+  const [user, account] = await Promise.all([db.user.findUnique({ where: { email } }), db.customerAccount.findUnique({ where: { email }, include: { customer: true } })]);
+  const [staffPassword, customerPassword] = await Promise.all([verifyPassword(data.password, user?.passwordHash || dummy), verifyPassword(data.password, account?.passwordHash || dummy)]);
+  const staffValid = staffPassword && user?.active && !user.registrationPending && !user.archivedAt;
+  const customerValid = customerPassword && account?.customer.active && !account.customer.archivedAt;
+  if (Boolean(staffValid) === Boolean(customerValid)) fail(401, 'LOGIN_FAILED', 'The credentials are incorrect or the account is unavailable.');
+  if (staffValid) {
+    const current = await db.user.findUnique({ where: { id: user.id } });
+    if (!current?.active || current.registrationPending || current.archivedAt || current.authVersion !== user.authVersion) fail(401, 'LOGIN_FAILED', 'The account is unavailable.');
+    await regenerateSession(req); req.session.userId = current.id; req.session.authVersion = current.authVersion;
+    const csrf = csrfToken(req); await saveSession(req);
+    return { user: safeUser(current), customer: null, accountType: current.role, redirectTo: accountDestination(current), csrf };
+  }
+  const current = await db.customerAccount.findUnique({ where: { id: account.id }, include: { customer: true } });
+  if (!current?.customer.active || current.customer.archivedAt || current.passwordHash !== account.passwordHash) fail(401, 'LOGIN_FAILED', 'The account is unavailable.');
+  await regenerateSession(req); req.session.customerAccountId = current.id;
+  const csrf = csrfToken(req); await saveSession(req);
+  return { user: null, customer: safeCustomer(current), accountType: 'CUSTOMER', redirectTo: '/customer.html', csrf };
 }
 export async function logout(req, io) {
   const id = req.sessionID;

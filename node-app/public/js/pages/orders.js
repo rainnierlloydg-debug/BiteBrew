@@ -1,3 +1,4 @@
+import { confirmMessage } from '../../shared/message-box.js';
 import { renderMarkup } from '/assets/react-runtime.js';
 import { api, operation, query } from '../api.js';
 import { e, money, dateTime, header, icon, badge, label, table, pager, bindPager, field, input, empty, modal, errorMessage, toast, formValues } from '../ui.js';
@@ -24,7 +25,7 @@ export async function openOrder(ctx, id) {
       const refresh = async () => { close(true); await openOrder(ctx, id); ctx.refresh(); };
       const action = operation();
       const attempt = async work => { try { await work(); await refresh(); } catch (error) { renderMarkup(dialog.querySelector('[data-detail-error]'), errorMessage(error)); } };
-      dialog.querySelector('[data-next]')?.addEventListener('click', () => { const status = workflow[order.status]; if (confirm(`Mark this order ${label(status)}?`)) attempt(() => action('/orders/' + id + '/status', { status, version: order.version })); });
+      dialog.querySelector('[data-next]')?.addEventListener('click', async () => { const status = workflow[order.status]; if (await confirmMessage(`Mark this order ${label(status)}?`)) attempt(() => action('/orders/' + id + '/status', { status, version: order.version })); });
       dialog.querySelector('[data-payment]')?.addEventListener('click', () => paymentForm(ctx, order, refresh));
       dialog.querySelector('[data-edit]')?.addEventListener('click', () => { if (order.status === 'CONFIRMED') reasonForm('Owner correction', 'Explain the confirmed-order correction. Historical versions remain recorded.', async reason => { close(true); setTimeout(() => ctx.go('pos', { editId: id, reason }), 0); }); else { close(true); ctx.go('pos', { editId: id }); } });
       dialog.querySelector('[data-cancel]')?.addEventListener('click', () => reasonForm('Cancel order', 'Give a reason. Preparation-stage cancellations require the owner.', async reason => {
@@ -34,7 +35,7 @@ export async function openOrder(ctx, id) {
       dialog.querySelector('[data-receipt]')?.addEventListener('click', () => documentPreview(id, 'receipt'));
       dialog.querySelector('[data-kitchen-slip]').onclick = () => documentPreview(id, 'kitchen');
       dialog.querySelector('[data-chat]').onclick = () => { close(true); ctx.go('chat', { orderId: id }); };
-      dialog.querySelectorAll('[data-verify]').forEach(button => button.onclick = () => { if (confirm('Have you manually checked the receiving GCash account and verified this transfer? A reference alone is not verification.')) attempt(() => action('/payments/' + button.dataset.verify + '/verify', { approved: true })); });
+      dialog.querySelectorAll('[data-verify]').forEach(button => button.onclick = async () => { if (await confirmMessage('Have you manually checked the receiving GCash account and verified this transfer? A reference alone is not verification.')) attempt(() => action('/payments/' + button.dataset.verify + '/verify', { approved: true })); });
       dialog.querySelectorAll('[data-reject]').forEach(button => button.onclick = () => reasonForm('Reject GCash payment', 'Explain why this payment is being rejected.', async reason => { await action('/payments/' + button.dataset.reject + '/verify', { approved: false, reason }); await refresh(); }));
       dialog.querySelectorAll('[data-refund]').forEach(button => button.onclick = () => refundForm(ctx, order, order.payments.find(payment => payment.id === button.dataset.refund), refresh));
     });
@@ -54,7 +55,7 @@ export function paymentForm(ctx, order, saved) {
 function refundForm(ctx, order, payment, saved) {
   const remaining = Number(payment.amount) - payment.refunds.reduce((sum, refund) => sum + Number(refund.amount), 0), submit = operation();
   modal(ctx.state.user.role === 'OWNER' ? 'Authorize refund' : 'Request refund', `<p>Refundable ${money(remaining)} · ${e(label(payment.method))}</p><form>${field('Amount (PHP)', input('amount', remaining.toFixed(2), `type="number" min="0.01" max="${remaining.toFixed(2)}" step="0.01" required`))}${field('Reason', '<textarea name="reason" rows="3" required minlength="3" maxlength="1000"></textarea>')}<p class="notice">The original payment is preserved. Refunds do not reopen the outstanding balance.</p><div data-error></div><button>${ctx.state.user.role === 'OWNER' ? 'Authorize refund' : 'Send request'}</button></form>`, (dialog, close) => {
-    const form = dialog.querySelector('form'); form.onsubmit = async event => { event.preventDefault(); if (!confirm('Confirm this refund operation?')) return; const button = form.querySelector('button'); button.disabled = true; try { ctx.requireOnline(); const values = formValues(form); if (ctx.state.user.role === 'OWNER') await submit('/payments/' + payment.id + '/refunds', values); else await submit('/orders/' + order.id + '/requests', { ...values, kind: 'REFUND', paymentId: payment.id }); close(true); await saved(); } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); } finally { button.disabled = false; } };
+    const form = dialog.querySelector('form'); form.onsubmit = async event => { event.preventDefault(); if (!(await confirmMessage('Confirm this refund operation?'))) return; const button = form.querySelector('button'); button.disabled = true; try { ctx.requireOnline(); const values = formValues(form); if (ctx.state.user.role === 'OWNER') await submit('/payments/' + payment.id + '/refunds', values); else await submit('/orders/' + order.id + '/requests', { ...values, kind: 'REFUND', paymentId: payment.id }); close(true); await saved(); } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); } finally { button.disabled = false; } };
   });
 }
 export async function renderKitchen(ctx) {
