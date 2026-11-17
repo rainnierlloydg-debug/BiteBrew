@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { db } from '../db.js';
 import { atomic, audit } from '../lib/atomic.js';
 import { authorize } from '../lib/permissions.js';
-import { BRAND } from '../../public/shared/brand.js';
+import { BRAND, brandBusiness } from '../../public/shared/brand.js';
 export const defaults = {
   name: BRAND.name, systemName: BRAND.systemName,
   address: 'Poblacion 1, Victoria, Oriental Mindoro', contact: '0985 986 4399', hours: '7:00 AM–8:00 PM',
@@ -11,7 +11,7 @@ export const defaults = {
   paymentMethods: ['CASH', 'GCASH'], allowCashierDiscounts: false, taxBps: 0, serviceBps: 0,
   currency: 'PHP', timezone: 'Asia/Manila',
 };
-export async function settings(tx = db) { return { ...defaults, ...(await tx.setting.findUnique({ where: { id: 1 } }))?.data }; }
+export async function settings(tx = db) { return brandBusiness({ ...defaults, ...(await tx.setting.findUnique({ where: { id: 1 } }))?.data }); }
 const schema = z.object({
   name: z.string().trim().min(1).max(120), address: z.string().trim().min(1).max(255), contact: z.string().trim().min(1).max(40),
   hours: z.string().trim().min(1).max(120), facebook: z.url().startsWith('https://').max(500),

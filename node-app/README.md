@@ -27,7 +27,7 @@ npm run setup:local
 Choose one initialization path:
 
 ```powershell
-# Existing Ella’s Pizza workspace: preserve staff, menu photos and transaction snapshots.
+# Existing workspace: preserve staff, menu photos and transaction snapshots.
 npm run import:legacy
 
 # OR a fresh installation: choose your own owner credentials, then load supplied menu.

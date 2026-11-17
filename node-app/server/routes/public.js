@@ -2,6 +2,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { z } from 'zod';
 import { db } from '../db.js';
+import { brandText } from '../../public/shared/brand.js';
 import { config } from '../config.js';
 import { pagination, pageResult } from '../lib/time.js';
 import { fail } from '../lib/errors.js';
@@ -18,7 +19,7 @@ export function publicRoutes() {
         db.menuItem.count({ where }),
         db.category.findMany({ where: { active: true, archivedAt: null, products: { some: { active: true, archivedAt: null } } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
       ]);
-      res.json({ ...pageResult(products.map(product => ({ ...product, variants: product.variants.map(variant => ({ ...variant, addons: variant.addons.map(link => link.addon) })), image: product.image ? `/api/public/products/${product.id}/image` : null })), total, p), categories });
+      res.json({ ...pageResult(products.map(product => ({ ...product, name: brandText(product.name), description: brandText(product.description), variants: product.variants.map(variant => ({ ...variant, addons: variant.addons.map(link => link.addon) })), image: product.image ? `/api/public/products/${product.id}/image` : null })), total, p), categories });
     } catch (error) { next(error); }
   });
   // Only expose the image of a currently public product, never the upload directory.

@@ -1,5 +1,5 @@
 {
-  "source_image": "resources/images/ellas-pizza-product-photos.png",
+  "source_image": "resources/images/bite-brew-product-photos.png",
   "source_width": 1225,
   "source_height": 620,
   "frames": {
@@ -63,7 +63,7 @@
       "width": 164,
       "height": 86
     },
-    "EP-ELLAS-BEST": {
+    "BB-SPECIAL": {
       "x": 783,
       "y": 315,
       "width": 163,

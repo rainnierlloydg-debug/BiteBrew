@@ -47,6 +47,6 @@ async function collect(folder) { for (const entry of (await fs.readdir(folder, {
 await collect(path.join(root, 'public'));
 const workerPath = path.join(root, 'public/sw.js'); let worker = await fs.readFile(workerPath, 'utf8');
 for (const match of worker.matchAll(/'((?:\/assets|\/css|\/js|\/shared|\/icons|\/images|\/customer|\/index|\/offline|\/manifest)[^']*)'/g)) await fs.access(path.join(root, 'public', match[1]));
-worker = worker.replace(/const VERSION = '[^']+';/, `const VERSION = 'ellas-shell-${hash.digest('hex').slice(0, 16)}';`);
+worker = worker.replace(/const VERSION = '[^']+';/, `const VERSION = 'bite-brew-shell-${hash.digest('hex').slice(0, 16)}';`);
 await fs.writeFile(workerPath, worker);
 console.log(`Built the React frontend and prepared ${count} public assets, PNG icons, and a versioned service-worker cache.`);

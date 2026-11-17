@@ -1,9 +1,9 @@
-import { BRAND } from './shared/brand.js';
+import { BRAND, brandText } from './shared/brand.js';
 import { activeUser, syncDrafts } from './js/offline-store.js';
-const VERSION = 'ellas-shell-74fd7b43eb45b10f';
+const VERSION = 'bite-brew-shell-86f66da6c3e6fe45';
 const ASSETS = ['/shared/fontawesome-icons.js', '/shared/fontawesome.LICENSE.txt', '/assets/react-runtime.js', '/customer.html', '/js/customer.js', '/js/support-chat.js', '/images/hero-pizza-burger.png', '/images/hero-food.png', '/js/storefront.js', '/staff.html', '/css/landing.css', '/js/landing.js', '/images/burger.webp', '/images/milk-tea.webp', '/images/fries.webp', '/', '/index.html', '/offline.html', '/manifest.webmanifest', '/css/app.css', '/css/print.css', '/js/app.js', '/js/api.js', '/js/ui.js', '/js/offline-store.js', '/js/pwa.js', '/js/realtime.js', '/js/pages/dashboard.js', '/js/pages/pos.js', '/js/pages/orders.js', '/js/pages/management.js', '/js/pages/payments.js', '/js/pages/reports.js', '/js/pages/chat.js', '/js/pages/settings.js', '/js/pages/notifications.js', '/js/document.js', '/shared/calculation.js', '/shared/brand.js', '/icons/brand-logo.png', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(ASSETS.map(url => new Request(url, { cache: 'reload' }))))));
-self.addEventListener('activate', event => event.waitUntil((async () => { for (const name of await caches.keys()) if (name.startsWith('ellas-shell-') && name !== VERSION) await caches.delete(name); await self.clients.claim(); })()));
+self.addEventListener('activate', event => event.waitUntil((async () => { for (const name of await caches.keys()) if ((name.startsWith('bite-brew-shell-') || name.startsWith('ellas-shell-')) && name !== VERSION) await caches.delete(name); await self.clients.claim(); })()));
 self.addEventListener('message', event => { if (event.data?.type === 'APPLY_UPDATE') self.skipWaiting(); if (event.data?.type === 'SYNC_NOW') event.waitUntil(syncDrafts({ manual: true })); });
 self.addEventListener('sync', event => { if (event.tag === 'ellas-order-drafts') event.waitUntil(syncDrafts()); });
 self.addEventListener('fetch', event => {
@@ -26,7 +26,7 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => event.waitUntil((async () => {
   let value; try { value = event.data?.json(); } catch { value = {}; }
   const url = typeof value?.url === 'string' && value.url.startsWith('/?page=') ? value.url : '/?page=notifications';
-  await self.registration.showNotification(typeof value?.title === 'string' ? value.title.slice(0, 120) : BRAND.name, { body: 'There is a new update in your workspace.', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: value?.tag || 'ellas-update', data: { url } });
+  await self.registration.showNotification(typeof value?.title === 'string' ? brandText(value.title).slice(0, 120) : BRAND.name, { body: 'There is a new update in your workspace.', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: value?.tag || 'bite-brew-update', data: { url } });
 })()));
 self.addEventListener('notificationclick', event => {
   event.notification.close();

@@ -27,7 +27,8 @@
     "menu:expand": "node scripts/expand-menu.js",
     "prestart": "node scripts/build.js",
     "predev": "node scripts/build.js",
-    "pretest:browser": "node scripts/build.js"
+    "pretest:browser": "node scripts/build.js",
+    "rebrand": "node scripts/rebrand.js"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

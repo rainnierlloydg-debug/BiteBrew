@@ -4,7 +4,7 @@ import { audit } from '../lib/atomic.js';
 import { fail } from '../lib/errors.js';
 import { orderView } from '../services/orders.js';
 import { report } from '../services/reports.js';
-import { BRAND } from '../../public/shared/brand.js';
+import { BRAND, brandText } from '../../public/shared/brand.js';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const money = value => 'PHP ' + Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,7 +39,7 @@ export async function receiptPdf(actor, id, res) {
 }
 const financial = new Set(['amount', 'subtotal', 'discount', 'charges', 'total', 'paid', 'balance', 'grossSales', 'discounts', 'recognizedSales', 'salesRefunds', 'netSales', 'collections', 'sales', 'otherRefunds', 'refunds', 'netCollections', 'outstanding', 'refundObligations']);
 function csvCell(value, key) {
-  let text = value instanceof Date ? date(value) : String(value ?? '');
+  let text = value instanceof Date ? date(value) : String(brandText(value) ?? '');
   if (!(financial.has(key) && /^-?\d+(\.\d+)?$/.test(text)) && /^[=+@\-]/.test(text.trimStart())) text = "'" + text;
   return '"' + text.replaceAll('"', '""') + '"';
 }
@@ -61,7 +61,7 @@ export async function exportReport(actor, type, format, query, res) {
   document.fontSize(20).text(result.business.name).fontSize(13).text(type.toUpperCase() + ' REPORT').fontSize(10).text(`${result.period.from} — ${result.period.to} · Asia/Manila`).text('Generated ' + date(result.generatedAt)).moveDown();
   for (const [key, value] of Object.entries(result.summary)) document.text(key + ': ' + (key === 'completedOrders' ? value : money(value)));
   document.moveDown();
-  for (const row of result.data) { for (const [key, value] of Object.entries(row)) document.fontSize(9).text(key + ': ' + (value instanceof Date ? date(value) : String(value ?? '—'))); document.moveDown(); }
+  for (const row of result.data) { for (const [key, value] of Object.entries(row)) document.fontSize(9).text(key + ': ' + (value instanceof Date ? date(value) : String(brandText(value) ?? '—'))); document.moveDown(); }
   document.addPage().fontSize(13).text('Definitions').fontSize(10); for (const [key, value] of Object.entries(result.definitions)) document.moveDown(.5).text(key + ': ' + value);
   document.end();
 }

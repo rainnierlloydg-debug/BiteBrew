@@ -66,6 +66,8 @@ React components for the landing page, catalog, and customer accounts are in `no
 
 PHP, Laravel, and Herd are not runtime requirements for this Node application.
 
+The displayed business name is **Bite & Brew** throughout the application. Startup automatically updates former business branding, the supplied special-pizza name, and supplied product images. Historical receipts show the current branding while their stored transaction amounts and order numbers remain intact. Run `npm.cmd run rebrand` to apply the same update separately. Existing database names and private browser/session identifiers are retained for compatibility.
+
 ## Requirements
 
 - **Node.js 22.12 or newer**, with npm.
