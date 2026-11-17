@@ -14,7 +14,8 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
   const prismaSteps = fs.existsSync('node_modules/.prisma/client/schema.prisma') ? [['migrate', 'deploy']] : [['generate'], ['migrate', 'deploy']];
   for (const args of prismaSteps) { const result = spawnSync(process.execPath, ['node_modules/prisma/build/index.js', ...args], { stdio: 'pipe', env: process.env }); assert.equal(result.status, 0, 'Prisma generation / migration must succeed before integration tests.'); }
   const [{ createApplication }, { db }, { hashPassword }, { io }] = await Promise.all([import('../server/app.js'), import('../server/db.js'), import('../server/lib/password.js'), import('socket.io-client')]);
-  const application = await createApplication({ jobs: false });
+  const deliveredCodes = new Map();
+  const application = await createApplication({ jobs: false, verificationOptions: { send: async ({ email, code }) => deliveredCodes.set(email, code) } });
   await new Promise(resolve => application.server.listen(0, '127.0.0.1', resolve));
   const base = 'http://127.0.0.1:' + application.server.address().port, suffix = randomUUID().slice(0, 8), password = 'Fixture-only password ' + suffix;
   const ownerUser = await db.user.create({ data: { name: 'DEMONSTRATION test owner', email: 'test-owner-' + suffix + '@example.test', role: 'OWNER', passwordHash: await hashPassword(password) } });
@@ -22,12 +23,14 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
   t.after(async () => { for (const socket of sockets) socket.disconnect(); await application.close(); });
   function client() {
     return { cookie: '', csrf: '', user: null, async request(route, { method = 'GET', data, key = randomUUID(), status = 200, raw = false, noCsrf = false } = {}) {
+      if (route === '/customer/register' && data && !Object.hasOwn(data, 'confirmPassword')) data = { ...data, confirmPassword: data.password };
       const response = await fetch(base + '/api' + route, { method, headers: { Cookie: this.cookie, Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json', ...(noCsrf ? {} : { 'X-CSRF-Token': this.csrf }), 'X-Operation-ID': key }, body: data === undefined ? undefined : JSON.stringify(data) });
       const cookies = response.headers.getSetCookie(); if (cookies.length) this.cookie = cookies[0].split(';')[0];
       if (raw) { assert.equal(response.status, status); return response; }
       const result = await response.json(); assert.equal(response.status, status, method + ' ' + route + ': ' + JSON.stringify(result.error || ''));
       if (result.data?.csrf) this.csrf = result.data.csrf;
       if (result.data?.user) this.user = result.data.user;
+      if (result.data?.verificationRequired) return this.request('/customer/register/verify', { method: 'POST', data: { token: result.data.token, code: deliveredCodes.get(result.data.email) } });
       return result;
     }, async login(email) { await this.request('/session'); return this.request('/login', { method: 'POST', data: { email, password } }); } };
   }
@@ -113,7 +116,9 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
     assert.equal((await customer.request('/customer/profile')).data.id, registered.id);
     await customer.request('/customer/logout', { method: 'POST', data: {} });
     await customer.request('/customer/profile', { status: 401 });
-    await customer.request('/login', { method: 'POST', data: { email, password }, status: 401 });
+    const unified = (await customer.request('/login', { method: 'POST', data: { email, password } })).data;
+    assert.equal(unified.user, null); assert.equal(unified.customer.id, registered.id); assert.equal(unified.accountType, 'CUSTOMER');
+    await customer.request('/staff', { status: 401 });
     await customer.request('/customer/login', { method: 'POST', data: { email: ownerUser.email, password }, status: 401 });
     await customer.request('/customer/login', { method: 'POST', data: { email, password } });
     const account = await db.customerAccount.findUnique({ where: { id: registered.id } });
@@ -258,6 +263,38 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
     const history = await kitchen.request('/chat/rooms/' + room.id + '/messages?after=0'); assert.ok(history.data.some(row => row.id === first.data.id));
     const intruder = io(base, { transports: ['websocket'], auth: { csrf: 'invalid' }, extraHeaders: { Origin: process.env.APP_ORIGIN }, forceNew: true, reconnection: false }); sockets.push(intruder);
     await new Promise((resolve, reject) => { intruder.once('connect_error', resolve); intruder.once('connect', () => reject(new Error('Anonymous WebSocket connected.'))); });
+  });
+  await t.test('conversation deletion is personal, persistent, idempotent and preserves order records', async () => {
+    const path = '/chat/rooms/' + room.id;
+    const storedCount = await db.chatMessage.count({ where: { roomId: room.id } });
+    const key = randomUUID();
+    await anonymous.request(path + '/delete', { method: 'POST', data: {}, status: 401 });
+    await cashier.request(path + '/delete', { method: 'POST', data: {}, noCsrf: true, status: 419 });
+    await cashier.request(path + '/delete', { method: 'POST', data: {}, key });
+    await cashier.request(path + '/delete', { method: 'POST', data: {}, key });
+    assert.equal((await cashier.request('/chat/rooms')).data.some(row => row.id === room.id), false);
+    assert.equal((await cashier.request('/chat/rooms')).data.some(row => row.id === room.id), false, 'Reload does not recreate a deleted general room');
+    assert.equal((await cashier.request(path + '/messages?after=0')).data.length, 0);
+    assert.ok((await kitchen.request(path + '/messages')).data.length > 0, 'Other staff retain history');
+    assert.equal(await db.chatMessage.count({ where: { roomId: room.id } }), storedCount);
+    assert.equal(await db.auditLog.count({ where: { actorId: cashierUser.id, action: 'chat.conversation_deleted', recordId: room.id } }), 1);
+    const next = (await kitchen.request('/chat/messages', { method: 'POST', data: { roomId: room.id, clientId: randomUUID(), text: 'DEMONSTRATION new message after deletion' } })).data;
+    assert.equal((await cashier.request('/chat/rooms')).data.find(row => row.id === room.id).unread, 1);
+    assert.deepEqual((await cashier.request(path + '/messages?after=0')).data.map(row => row.id), [next.id]);
+    assert.equal((await cashier.request(path + '/messages?before=' + next.id)).data.length, 0, 'Earlier pagination cannot restore cleared messages');
+    await cashier.request(path + '/delete', { method: 'POST', data: {} });
+    await cashier.request('/chat/rooms', { method: 'POST', data: {} });
+    assert.equal((await cashier.request(path + '/messages')).data.length, 0, 'Explicitly reopening keeps old messages cleared');
+    const linked = (await cashier.request('/chat/rooms', { method: 'POST', data: { orderId: order.id } })).data;
+    const message = (await cashier.request('/chat/messages', { method: 'POST', data: { roomId: linked.id, clientId: randomUUID(), text: 'DEMONSTRATION linked order chat' } })).data;
+    const before = await db.order.findUnique({ where: { id: order.id } });
+    await cashier.request('/chat/rooms/' + linked.id + '/delete', { method: 'POST', data: {} });
+    assert.deepEqual(await db.order.findUnique({ where: { id: order.id } }), before);
+    assert.ok(await db.chatMessage.findUnique({ where: { id: message.id } }));
+    const restricted = await db.order.create({ data: { number: 'CHAT-PRIVATE-' + suffix, type: 'TAKEAWAY', subtotal: 0, discount: 0, charges: 0, total: 0, pricingSnapshot: {}, businessSnapshot: {}, createdByName: 'DEMONSTRATION fixture' } });
+    const privateRoom = (await owner.request('/chat/rooms', { method: 'POST', data: { orderId: restricted.id } })).data;
+    try { await kitchen.request('/chat/rooms/' + privateRoom.id + '/delete', { method: 'POST', data: {}, status: 403 }); }
+    finally { await db.chatParticipant.deleteMany({ where: { roomId: privateRoom.id } }); await db.chatRoom.delete({ where: { id: privateRoom.id } }); await db.order.delete({ where: { id: restricted.id } }); }
   });
   await t.test('deactivated accounts lose API and WebSocket access', async () => {
     await owner.request('/staff/' + cashierUser.id, { method: 'PUT', data: { name: cashierUser.name, email: cashierUser.email, role: 'CASHIER', active: false } });

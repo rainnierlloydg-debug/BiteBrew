@@ -1,4 +1,5 @@
 import { confirmMessage, showMessage, clearMessageBoxes } from '../shared/message-box.js';
+import { pushTarget } from '../shared/push-target.js';
 import { renderMarkup } from '/assets/react-runtime.js';
 import { api, operation, setCsrf, setAccount } from './api.js';
 import { activeUser, setActiveUser, cached, cacheData, listDrafts, clearPrivateData, syncDrafts } from './offline-store.js';
@@ -15,6 +16,7 @@ import * as chat from './pages/chat.js';
 import * as settings from './pages/settings.js';
 import * as notifications from './pages/notifications.js';
 
+import { isWorkspaceLocked, workspaceLocallyLocked, workspaceLockKey } from './workspace-session.js';
 import { BRAND } from '../shared/brand.js';
 const app = document.querySelector('#app');
 const navigation = [
@@ -128,103 +130,69 @@ async function sessionExpired() {
   clearMessageBoxes(); state.user = null; setAccount(null); state.dirty = false; renderLogin('Your session expired or account changed. Local drafts are retained. Sign in to resume.'); expiring = false;
 }
 async function renderLogin(message = '') {
-  renderMarkup(app, `<main class="login-layout customer-access staff-access"><section class="login-story"><img class="customer-story-photo" src="/images/hero-pizza-burger.png" width="1672" height="941" alt="Pepperoni pizza, a cheeseburger and golden fries"><div class="customer-story-content"><p class="eyebrow">YOUR DAILY WORKSPACE</p><h1>Good bites.<br><em>Better sips.</em></h1><p>Orders, kitchen and sales. One connected team.</p></div></section><section class="glass login-card"><a class="login-back-home" href="/">${icon('left', 14)} Back to home</a><a class="customer-login-brand" href="/" aria-label="Bite and Brew home"><img src="/icons/brand-logo.png" width="64" height="54" alt=""><strong>Bite &amp; Brew</strong><span>Admin &amp; staff workspace</span></a><h2>Welcome back.</h2><p>Sign in with your assigned staff account.</p>${message ? `<div class="notice" role="status">${e(message)}</div>` : ''}<form id="login-form">${field('Email address', input('email', '', 'type="email" required autocomplete="username" maxlength="190" placeholder="you@example.com"'))}${field('Password', `<div class="customer-password">${input('password', '', 'type="password" required autocomplete="current-password" maxlength="128" placeholder="Enter your password"')}<button type="button" class="password-toggle" data-toggle-password aria-label="Show password" aria-pressed="false">${icon('eye', 17)}</button></div>`)}<div data-error role="alert"></div><button type="submit" class="wide">Sign in</button></form><p class="customer-switch-prompt">New to the team?</p><button type="button" class="text-button customer-form-switch" data-register-staff>Create staff account</button><p class="staff-approval-note">New accounts need admin approval. For a password reset, contact the owner.</p><div class="customer-access-footer"><span>Looking for your customer account?</span><a href="/customer.html">Customer sign in</a><button type="button" class="text-button" data-install>Install app / Help</button></div></section></main>`);
-  if (message) toast(message, 'info');
-  const passwordButton = app.querySelector('[data-toggle-password]');
-  passwordButton.onclick = () => {
-    const password = app.querySelector('#login-form [name="password"]');
-    const visible = password.type === 'password';
-    password.type = visible ? 'text' : 'password';
-    passwordButton.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
-    passwordButton.setAttribute('aria-pressed', String(visible));
-    renderMarkup(passwordButton, icon(visible ? 'eye-slash' : 'eye', 17));
-  };
-  app.querySelector('[data-install]').onclick = installApp;
-  app.querySelector('[data-register-staff]').onclick = registerStaff;
-  try { await api('/session', { authEvent: false }); } catch {}
-  const form = app.querySelector('#login-form'); if (!form) return;
-  form.onsubmit = async event => { event.preventDefault(); const button = form.querySelector('button[type=submit]'); button.disabled = true;
-    try {
-      if (!navigator.onLine) throw new Error('Authentication requires connectivity. Reconnect to sign in.');
-      sessionEpoch++; const session = (await api('/login', { method: 'POST', data: Object.fromEntries(new FormData(form)), authEvent: false })).data;
-      const previous = await activeUser();
-      if (previous && previous.id !== session.user.id) { const pending = (await listDrafts(previous.id)).filter(draft => draft.status !== 'SYNCED'); if (pending.length && !(await confirmMessage(`Switching accounts clears ${pending.length} unsynchronized draft(s) belonging to the previous account. Continue?`))) { await api('/logout', { method: 'POST', data: {} }); throw new Error('Previous drafts retained. Sign in to the original account to resume them.'); } await clearPrivateData(previous.id); }
-      state.user = session.user; setAccount(session.user.id); state.sessionConfirmed = true; state.online = true; await setActiveUser(session.user); for (const key of Object.keys(filters)) delete filters[key];
-      await refreshBootstrap(); renderShell(); const requested = new URLSearchParams(location.search).get('page'); page = navigation.find(item => item[0] === requested && can(item[3]))?.[0] || navigation.find(item => can(item[3]))[0]; params = {}; await renderPage(); connectRealtime(pwaContext); syncDrafts().then(updateSync).catch(() => {});
-    } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); } finally { button.disabled = false; }
-  };
+  if (message) { try { sessionStorage.setItem('bite-brew-login-notice', message); } catch {} }
+  location.replace('/login.html');
 }
-function registerStaff() {
-  const card = app.querySelector('.staff-access .login-card');
-  const home = card.querySelector('.login-back-home').outerHTML;
-  const brand = card.querySelector('.customer-login-brand').outerHTML;
-  const footer = card.querySelector('.customer-access-footer').outerHTML;
-  const passwordField = (name, title) => field(title, '<div class="customer-password">' + input(name, '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="' + (name === 'password' ? 'Create a strong password' : 'Re-enter your password') + '"') + '<button type="button" class="password-toggle" data-password-field="' + name + '" aria-label="Show ' + title.toLowerCase() + '" aria-pressed="false">' + icon('eye', 17) + '</button></div>');
-  renderMarkup(card, home + brand + '<h2>Create your staff account</h2><p>Enter your details to join the Bite &amp; Brew team.</p><form id="staff-registration-form">' + field('Full name', input('name', '', 'required maxlength="120" autocomplete="name" placeholder="Your full name"')) + field('Email address', input('email', '', 'type="email" required maxlength="190" autocomplete="username" placeholder="you@example.com"')) + passwordField('password', 'Password') + passwordField('confirmPassword', 'Confirm password') + '<p class="customer-password-hint">Use at least 12 characters for your password.</p><div data-error role="alert"></div><button type="submit" class="wide">Create staff account</button></form><p class="staff-approval-note">Your account needs admin approval before you can sign in. The owner assigns your role.</p><p class="customer-switch-prompt">Already have an account?</p><button type="button" class="text-button customer-form-switch" data-cancel>Back to sign in</button>' + footer);
-  card.querySelector('[data-install]').onclick = installApp;
-  const form = card.querySelector('#staff-registration-form');
-  const back = card.querySelector('[data-cancel]');
-  back.onclick = () => renderLogin();
-  card.querySelectorAll('[data-password-field]').forEach(button => {
-    button.onclick = () => {
-      const password = form.elements[button.dataset.passwordField];
-      const visible = password.type === 'password';
-      password.type = visible ? 'text' : 'password';
-      button.setAttribute('aria-label', (visible ? 'Hide ' : 'Show ') + (password.name === 'password' ? 'password' : 'confirm password'));
-      button.setAttribute('aria-pressed', String(visible));
-      renderMarkup(button, icon(visible ? 'eye-slash' : 'eye', 17));
-    };
-  });
-  form.elements.name.focus({ preventScroll: true });
-  form.onsubmit = async event => {
-    event.preventDefault();
-    const button = form.querySelector('[type=submit]');
-    button.disabled = true; back.disabled = true;
-    button.textContent = 'Submitting registration?';
-    form.setAttribute('aria-busy', 'true');
-    try {
-      const values = Object.fromEntries(new FormData(form));
-      if (values.password !== values.confirmPassword) throw new Error('Passwords do not match.');
-      delete values.confirmPassword;
-      await api('/session', { authEvent: false });
-      const result = await api('/staff/register', { method: 'POST', data: values, authEvent: false });
-      await renderLogin(result.data.message);
-    } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); }
-    finally { button.disabled = false; back.disabled = false; button.textContent = 'Create staff account'; form.removeAttribute('aria-busy'); }
-  };
-}
+let signingOut = false;
 async function logout() {
+  if (signingOut || !state.user) return;
+  signingOut = true;
   try {
     requireOnline(); if (leaveWork) await leaveWork();
     const drafts = await listDrafts(state.user.id), pending = drafts.filter(draft => draft.status !== 'SYNCED');
     if (pending.some(draft => draft.status === 'SYNCING')) throw new Error('Wait for the active synchronization to finish before signing out.');
-    if ((pending.length || isDirty()) && !(await confirmMessage(`Sign out and clear private data on this device? ${pending.length} unsynchronized draft(s) would be lost.`))) return;
+    const warning = pending.length ? `\n\n${pending.length} unsynchronized draft(s) on this device will be cleared.` : isDirty() ? '\n\nUnsaved changes will be discarded.' : '';
+    if (!(await confirmMessage('Are you sure you want to sign out?' + warning, { title: 'Sign out?', confirmLabel: 'Sign out', cancelLabel: 'Cancel' }))) return;
     sessionEpoch++; const registration = getRegistration(); const subscription = await registration?.pushManager?.getSubscription(); if (subscription) await subscription.unsubscribe().catch(() => {});
     const push = await cached(state.user.id, 'push'); if (push?.value.id) await api('/push/subscriptions/' + push.value.id, { method: 'DELETE' });
-    await api('/logout', { method: 'POST', data: {} }); await clearPrivateData(state.user.id); clearMessageBoxes(); disconnectRealtime(); generation++; clearView(); state.user = null; setAccount(null); state.sessionConfirmed = false; state.dirty = false; setCsrf(null); for (const dialog of document.querySelectorAll('dialog:not(.message-box)')) dialog.remove(); await renderLogin('You have been signed out. Private local data was cleared.');
-  } catch (error) { toast(error.message, 'error'); }
+    await api('/logout', { method: 'POST', data: {} }); await clearPrivateData(state.user.id); clearMessageBoxes(); disconnectRealtime(); generation++; clearView(); state.user = null; setAccount(null); state.sessionConfirmed = false; state.dirty = false; setCsrf(null); for (const dialog of document.querySelectorAll('dialog:not(.message-box)')) dialog.remove(); await renderLogin();
+  } catch (error) { toast(error.message, 'error'); } finally { signingOut = false; }
 }
 function changePassword() {
   try { requireOnline(); const submit = operation(); modal('Change password', `<form>${field('Current password', input('currentPassword', '', 'type="password" required autocomplete="current-password"'))}${field('New password', input('password', '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"'))}<div data-error></div><button>Change password</button></form>`, (dialog, close) => { const form = dialog.querySelector('form'); form.onsubmit = async event => { event.preventDefault(); const button = form.querySelector('button'); button.disabled = true; try { await submit('/password', Object.fromEntries(new FormData(form))); close(true); await resume(); toast('Password changed. Other sessions were signed out.'); } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); } finally { button.disabled = false; } }; }); } catch (error) { toast(error.message, 'error'); }
 }
 async function resume() {
+  if (await isWorkspaceLocked()) { blockWorkspace(); return; }
   const epoch = sessionEpoch;
   if (!state.user || !navigator.onLine) { updateConnection(); return; }
   try { const session = (await api('/session', { authEvent: false })).data; if (epoch !== sessionEpoch) return; if (!session.user || session.user.id !== state.user.id) return sessionExpired(); state.sessionConfirmed = true; state.user = session.user; setAccount(session.user.id); await setActiveUser(session.user, true); if (epoch !== sessionEpoch) return; await refreshBootstrap(); await connectRealtime(pwaContext); await syncDrafts(); updateConnection(); updateSync(); updateBadges(); } catch (error) { if (error.status === 401) sessionExpired(); else { state.live = false; updateConnection(); } }
 }
 const pwaContext = { state, isDirty, sessionExpired, updateSync, updateConnection };
+function blockWorkspace() {
+  app.hidden = true; document.body.style.visibility = 'hidden'; sessionEpoch++; generation++; state.sessionConfirmed = false;
+  state.user = null; state.dirty = false; setAccount(null); disconnectRealtime(); clearView();
+  clearMessageBoxes(); location.replace('/login.html');
+}
+window.addEventListener('pagehide', () => { app.hidden = true; document.body.style.visibility = 'hidden'; });
+window.addEventListener('pageshow', async event => {
+  if (!event.persisted) return;
+  app.hidden = true; document.body.style.visibility = 'hidden';
+  try {
+    if (await isWorkspaceLocked()) { blockWorkspace(); return; }
+    const session = (await api('/session', { authEvent: false })).data;
+    if (!session.user || session.user.id !== state.user?.id) { blockWorkspace(); return; }
+    await resume(); if (state.user && !workspaceLocallyLocked()) { app.hidden = false; document.body.style.visibility = ''; }
+  } catch { blockWorkspace(); }
+});
+window.addEventListener('storage', event => { if (event.key === workspaceLockKey && event.newValue !== null) blockWorkspace(); });
 window.addEventListener('auth-expired', sessionExpired);
 window.addEventListener('offline', () => { state.online = false; state.live = false; updateConnection(); });
 window.addEventListener('online', async () => { state.online = true; await resume(); if (state.user && !isDirty() && !['pos', 'chat'].includes(page)) renderPage(); });
 window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - lastResume > 10000) { lastResume = Date.now(); resume(); } });
 window.addEventListener('server-change', () => updateBadges());
 window.addEventListener('workspace-notification', event => displayNotification(event.detail));
+window.addEventListener('open-push-notification', event => {
+  const url = new URL(pushTarget(event.detail?.url, location.origin), location.origin);
+  if (!state.user) { history.replaceState(null, '', url.pathname + url.search); return; }
+  go(url.searchParams.get('page'), { ...(url.searchParams.get('order') ? { order: url.searchParams.get('order') } : {}) }).catch(error => toast(error.message, 'error'));
+});
 window.addEventListener('draft-sync', () => updateSync());
 window.addEventListener('beforeunload', event => { if (isDirty()) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('resize', () => { const sidebar = document.querySelector('#sidebar'); if (!sidebar) return; if (innerWidth > 900) { closeSidebar(); sidebar.inert = false; sidebar.removeAttribute('aria-hidden'); } else if (!sidebarOpen) { sidebar.inert = true; sidebar.setAttribute('aria-hidden', 'true'); } });
 window.addEventListener('keydown', event => { if (!sidebarOpen || document.querySelector('dialog[open]')) return; if (event.key === 'Escape') closeSidebar(); if (event.key === 'Tab') { const elements = [...document.querySelectorAll('#sidebar button,#sidebar a[href]')], first = elements[0], last = elements.at(-1); if (event.shiftKey && document.activeElement === first) { last.focus(); event.preventDefault(); } else if (!event.shiftKey && document.activeElement === last) { first.focus(); event.preventDefault(); } } });
 setInterval(() => { if (state.user && navigator.onLine) { updateBadges(); if (can('pos')) syncDrafts().then(updateSync).catch(() => {}); } }, 30000);
 async function start() {
+  if (await isWorkspaceLocked()) { blockWorkspace(); return; }
   try {
     const session = (await api('/session', { authEvent: false })).data;
     if (!session.user) { await renderLogin(); setupPwa(pwaContext); return; }

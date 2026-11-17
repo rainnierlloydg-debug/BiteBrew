@@ -7,6 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { calculate, quoteMaterial } from '../public/shared/calculation.js';
 import { BRAND } from '../public/shared/brand.js';
+import webpush from 'web-push';
 
 const root = path.resolve('.'), artifacts = path.join(root, 'docs/verification-artifacts'); fs.mkdirSync(artifacts, { recursive: true });
 const user = { id: randomUUID(), name: 'DEMONSTRATION UI fixture', email: 'fixture@example.test', role: 'OWNER', permissions: ['dashboard', 'pos', 'orders', 'kitchen', 'menu', 'customers', 'payments', 'reports', 'chat', 'notifications', 'archives', 'staff', 'audit', 'settings'] };
@@ -31,13 +32,23 @@ const summary = { grossSales: '0.00', discounts: '0.00', netSales: '0.00', colle
 const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 const paged = data => ({ data, meta: { page: 1, pageSize: 100, total: data.length, lastPage: 1 } });
 let mode = 'accept', accepted = new Map(), officialCount = 0;
-let customerSignedIn = false, customerCheckoutCount = 0;
-let staffSignup = null, catalogPageSize = 100;
+let customerSignedIn = false, customerCheckoutCount = 0, customerLogoutCount = 0, staffSignedIn = false, staffLogoutCount = 0;
+let catalogPageSize = 100, activeStaffAccount = user;
+const staffAccounts = [];
+const staffChatRoom = { id: '00000000-0000-4000-8000-000000000001', name: 'DEMONSTRATION general room', unread: 0 };
+let staffChatHidden = false, staffChatDeletes = 0;
+let pushFixtureEnabled = false, pushFixtureRecords = [], pushFixtureTests = 0;
+const pushFixtureKey = webpush.generateVAPIDKeys().publicKey;
 const archiveFixture = { id: randomUUID(), name: 'DEMONSTRATION archive customer', contact: 'fixture contact', active: true };
 let archiveFixtureEnabled = false, archiveFixtureArchived = false, archiveChanges = 0;
 const ownerPermissions = [...user.permissions];
 const customerFixture = { id: randomUUID(), name: 'DEMONSTRATION customer', email: 'customer@example.test' };
 const supportRoom = { id: randomUUID(), name: customerFixture.name }, supportMessages = [];
+const auditOrder = { id: randomUUID(), number: 'DEMO-AUDIT-1', type: 'TAKEAWAY', status: 'PENDING', customerName: 'DEMONSTRATION unchanged customer', subtotal: '200.00', total: '200.00', paid: '0', passwordHash: 'DO-NOT-DISPLAY-FIXTURE', items: [{ id: randomUUID(), name: 'Pizza Cheese', variantName: 'Regular', quantity: 1, unitPrice: '200', subtotal: '200', addons: [], instructions: '<img src=x onerror=alert(1)>' }] };
+const auditFixtures = [
+ { id: 1, action: 'order.created', recordType: 'orders', recordId: auditOrder.id, createdAt: new Date().toISOString(), actor: user, before: null, after: auditOrder },
+ { id: 2, action: 'order.corrected', recordType: 'orders', recordId: auditOrder.id, createdAt: new Date().toISOString(), actor: user, before: { ...auditOrder, items: undefined, pricingSnapshot: { lines: auditOrder.items } }, after: { ...auditOrder, status: 'CONFIRMED', subtotal: '400.00', total: '400.00', paid: '100.00', items: auditOrder.items.map(item=>({...item,quantity:2,subtotal:'400'})) } },
+];
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -56,12 +67,22 @@ const server = createServer(async (req, res) => {
         }
         return json({ data: supportMessages.filter(message => message.id > Number(url.searchParams.get('after') || 0)), meta: { hasMore: false } });
       }
-      if (route === '/session') return json({ data: { user: mode === 'expired' ? null : user, csrf: 'fixture-csrf' } });
-      if (route === '/staff/register') { staffSignup = { id: randomUUID(), name: data.name, email: data.email, role: 'CASHIER', active: false, registrationPending: true }; return json({ data: { message: 'Your staff registration request has been submitted. Wait for admin approval before signing in.' } }); }
-      if (route === '/staff') return json(paged(staffSignup && Boolean(url.searchParams.get('status') === 'pending') === staffSignup.registrationPending ? [staffSignup] : []));
-      if (route.endsWith('/review-registration')) { staffSignup.registrationPending = false; staffSignup.active = data.action === 'approve'; staffSignup.role = data.role || staffSignup.role; return json({ data: staffSignup }); }
+      if (route === '/session') return json({ data: { user: mode === 'expired' || !staffSignedIn ? null : activeStaffAccount, customer: !staffSignedIn && customerSignedIn ? customerFixture : null, csrf: 'fixture-csrf' } });
+      if (route === '/staff/register') return json({error:{message:'Staff accounts are created by the administrator.'}},410);
+      if (route === '/staff' && req.method === 'POST') { const row={...data,id:randomUUID(),permissions:data.role==='KITCHEN'?['kitchen','chat','notifications']:ownerPermissions};staffAccounts.push(row);const {password,...safe}=row;return json({data:safe}); }
+      if (route === '/staff') return json(paged(staffAccounts.map(({password,...row})=>row)));
+      if (route === '/login') {
+        if(data.email===customerFixture.email){customerSignedIn=true;staffSignedIn=false;return json({data:{user:null,customer:customerFixture,accountType:'CUSTOMER',csrf:'customer-fixture-csrf'}});}
+        const account=data.email===user.email?user:staffAccounts.find(row=>row.email===data.email);
+        if(!account)return json({error:{message:'The credentials are incorrect.'}},401);
+        staffSignedIn=true;customerSignedIn=false;activeStaffAccount=account;const {password,...safe}=account;return json({data:{user:safe,customer:null,accountType:account.role,csrf:'fixture-csrf'}});
+      }
+      if (route === '/logout') { staffSignedIn = false; staffLogoutCount++; return json({ data: {} }); }
+      if (route === '/customer/logout') { customerSignedIn = false; customerLogoutCount++; return json({ data: {} }); }
       if (route === '/customer/session') return json({ data: { customer: customerSignedIn ? customerFixture : null, csrf: 'customer-fixture-csrf' } });
-      if (route === '/customer/login' || route === '/customer/register') { customerSignedIn = true; return json({ data: { customer: customerFixture, csrf: 'customer-fixture-csrf' } }); }
+      if (route === '/customer/register' || route === '/customer/register/resend') return json({ data: { verificationRequired: true, token: 'a'.repeat(64), email: customerFixture.email, expiresAt: new Date(Date.now()+600000).toISOString(), resendAt: new Date(Date.now()+60000).toISOString() } });
+      if (route === '/customer/register/verify' && data.code !== '123456') return json({ error: { code: 'CODE_INVALID', message: 'Incorrect confirmation code.' } }, 422);
+      if (route === '/customer/login' || route === '/customer/register/verify') { customerSignedIn = true; staffSignedIn = false; return json({ data: { customer: customerFixture, csrf: 'customer-fixture-csrf' } }); }
       if (route === '/customer/quote' || route === '/customer/checkout') {
         if (!customerSignedIn) return json({ error: { message: 'Customer sign in required' } }, 401);
         const quote = calculate({ items: data.items.map(line => { const product = products.find(item => item.variants.some(variant => variant.id === line.variantId)), variant = product.variants.find(item => item.id === line.variantId); return { ...line, name: product.name, variantName: variant.name, basePrice: variant.price, addons: (line.addons || []).map(id => addons.find(addon => addon.id === id)) }; }) });
@@ -74,7 +95,7 @@ const server = createServer(async (req, res) => {
         const page = Number(url.searchParams.get('page') || 1), pageSize = 12;
         return json({ data: matches.slice((page - 1) * pageSize, page * pageSize), categories, meta: { total: matches.length, page, pageSize, lastPage: Math.max(1, Math.ceil(matches.length / pageSize)) } });
       }
-      if (route === '/bootstrap') return json({ data: { business, categories, discounts: [], push: { enabled: false, publicKey: null } } });
+      if (route === '/bootstrap') return json({ data: { business, categories, discounts: [], push: { enabled: pushFixtureEnabled, publicKey: pushFixtureEnabled ? pushFixtureKey : null } } });
       if (route === '/catalog') {
         const page = Number(url.searchParams.get('page') || 1), pageSize = Math.min(catalogPageSize, Number(url.searchParams.get('pageSize') || 100));
         return json({ data: products.slice((page - 1) * pageSize, page * pageSize), meta: { page, pageSize, total: products.length, lastPage: Math.ceil(products.length / pageSize) } });
@@ -82,14 +103,26 @@ const server = createServer(async (req, res) => {
       if (route === '/menu/products') return json(paged(products));
       if (route === '/categories') return json(paged(categories));
       if (route === '/addons') return json(paged(addons));
+      if (route === '/audit') return json(paged(auditFixtures));
       if (route === '/settings') return json({ data: business });
       if (route === '/customers') return json(paged(archiveFixtureEnabled && !archiveFixtureArchived ? [archiveFixture] : []));
       if (route === '/archives/customers') return json(paged(archiveFixtureEnabled && archiveFixtureArchived ? [{ ...archiveFixture, archivedAt: new Date().toISOString() }] : []));
       if (route === '/customers/' + archiveFixture.id + '/archive' || route === '/customers/' + archiveFixture.id + '/restore') { archiveChanges++; archiveFixtureArchived = route.endsWith('/archive'); return json({ data: archiveFixture }); }
       if (route === '/dashboard') return json({ data: { summary, created: 0, completed: 0, cancelled: 0, pending: 0, preparing: 0, ready: 0, trend: [], recent: [], bestsellers: [], statuses: [], scope: 'DEMONSTRATION UI fixture only', generatedAt: new Date(), period: { from: day, to: day } } });
       if (route.startsWith('/reports/')) return json({ ...paged([]), summary, business, scope: 'DEMONSTRATION fixture only', period: { from: day, to: day }, generatedAt: new Date(), definitions: { netSales: 'Fixture only; not business records.' } });
+      if (route === '/push/subscriptions' && req.method === 'GET') return json({ data: pushFixtureRecords });
+      if (route === '/push/subscriptions' && req.method === 'POST') {
+        const endpointKey = createHash('sha256').update(data.subscription.endpoint).digest('hex');
+        let row = pushFixtureRecords.find(item => item.endpointKey === endpointKey);
+        if (!row) { row = { id: randomUUID(), endpointKey }; pushFixtureRecords.push(row); }
+        row.preferences = data.preferences; return json({ data: { id: row.id, preferences: row.preferences } });
+      }
+      if (route.startsWith('/push/subscriptions/') && req.method === 'DELETE') { pushFixtureRecords = pushFixtureRecords.filter(row => row.id !== route.split('/').at(-1)); return json({ data: {} }); }
+      if (route === '/push/test') { assert.ok(pushFixtureRecords.some(row => row.id === data.subscriptionId)); pushFixtureTests++; return json({ data: { status: 'SENT', message: 'The push service accepted the test notification.' } }); }
       if (route === '/notifications') return json({ ...paged([]), unread: 0 });
-      if (route === '/chat/rooms') return json(paged([{ id: '00000000-0000-4000-8000-000000000001', name: 'DEMONSTRATION general room', unread: 0 }]));
+      if (route === '/chat/rooms/' + staffChatRoom.id + '/delete') { staffChatHidden=true;staffChatDeletes++;return json({data:{roomId:staffChatRoom.id,deleted:true,scope:'self'}}); }
+      if (route === '/chat/rooms' && req.method === 'POST') { staffChatHidden=false;return json({data:staffChatRoom}); }
+      if (route === '/chat/rooms') return json(paged(staffChatHidden?[]:[staffChatRoom]));
       if (route.includes('/messages')) return json({ data: [], meta: { hasMore: false } });
       if (route === '/orders/quote' || route === '/orders' && req.method === 'POST') {
         const quote = calculate({ items: data.items.map(line => { const product = products.find(item => item.variants.some(variant => variant.id === line.variantId)), variant = product.variants.find(item => item.id === line.variantId); return { ...line, name: product.name, variantName: variant.name, basePrice: variant.price, addons: line.addons.map(id => addons.find(addon => addon.id === id)) }; }) });
@@ -139,15 +172,17 @@ try {
     await evaluate(`(async()=>{if(!document.querySelector('#breadcrumb-page'))return true;const store=await import('/js/offline-store.js');for(let attempt=0;attempt<100;attempt++){const database=await store.database();const lease=await new Promise((resolve,reject)=>{const request=database.transaction('meta','readonly').objectStore('meta').get('syncLease');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});database.close();if(!lease||lease.expiresAt<Date.now())return true;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('Fixture navigation must wait for active synchronization to finish');})()`);
   };
   const acknowledge = async () => { for (let count=0;count<30;count++) { if (!(await evaluate('Boolean(document.querySelector(".message-box[open]:not(.message-box-confirm)"))'))) break; await evaluate('document.querySelector(".message-box [data-message-ok]").click()'); await pause(0); } };
-  const navigate = async page => { await acknowledge(); await settleSynchronizer(); await send('Page.navigate', { url: base + '/?page=' + page }); await waitFor(`document.querySelector('#breadcrumb-page')?.textContent && !document.querySelector('.loading')`); assert.equal(await evaluate(`Boolean(document.querySelector('#page-content .notice.error'))`), false, page + ' displayed an error'); };
+  const navigate = async page => { staffSignedIn=true;customerSignedIn=false;activeStaffAccount=user; await evaluate('(async()=>{const m=await import("/js/workspace-session.js");await m.unlockWorkspace();return true;})()'); await acknowledge(); await settleSynchronizer(); await send('Page.navigate', { url: base + '/?page=' + page }); await waitFor(`document.querySelector('#breadcrumb-page')?.textContent && !document.querySelector('.loading')`); assert.equal(await evaluate(`Boolean(document.querySelector('#page-content .notice.error'))`), false, page + ' displayed an error'); };
   await send('Runtime.enable'); await send('Network.enable'); await send('Page.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   if (!process.argv.includes('--offline-drafts-only')) {
   await send('Page.navigate', { url: base + '/' });
   await waitFor(`document.querySelector('.hero h1') && [...document.querySelectorAll('img')].every(image => image.complete && image.naturalWidth > 0)`);
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), true, 'Landing desktop overflow');
-  assert.equal(await evaluate(`document.querySelector('a[href="/customer.html"]') !== null && document.querySelector('a[href="/staff.html"]') !== null`), true, 'Landing links to both login pages');
-  assert.equal(await evaluate(`document.querySelector('[data-cart] svg')?.dataset.icon === 'cart-shopping' && document.querySelector('[data-cart] svg')?.dataset.prefix === 'fas'`), true, 'Storefront uses a local Font Awesome cart icon');
+  assert.equal(await evaluate(`document.querySelector('a[href="/login.html"]') !== null && document.querySelector('a[href="/staff.html"]') === null`), true, 'Landing links to one common sign-in page');
+  assert.equal(await evaluate(`!document.querySelector('#menu,#product-search,#product-results,.menu-card,[data-cart]') && !!document.querySelector('#information') && !!document.querySelector('#how-it-works')`),true,'Landing contains information instead of products and cart');
+  assert.equal(await evaluate(`!performance.getEntriesByType('resource').some(entry=>entry.name.includes('/api/public/products'))`),true,'Information landing does not fetch the product catalog');
+  assert.equal(await evaluate(`[...document.querySelectorAll('a[href^="#"]')].every(a=>document.getElementById(a.hash.slice(1)))`),true,'Landing section links all have targets');
   assert.equal(await evaluate(`(async()=>{const runtime=await import('/assets/react-runtime.js');return runtime.reactVersion.startsWith('19.') && runtime.isReactRoot(document.querySelector('#landing-root'));})()`), true, 'Landing uses the local React root');
   const controlResult = await evaluate(`(async()=>{
     const {renderMarkup,isReactRoot}=await import('/assets/react-runtime.js');
@@ -202,7 +237,11 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), true, 'Landing mobile overflow');
   await screenshot('landing-mobile');
+  assert.equal(await evaluate(`!document.querySelector('.menu-card,[data-cart]')`),true,'Mobile landing has no products or cart');
+  results.push('Information landing has no products, catalog requests or cart, fits desktop/mobile and has working section links');
+  await send('Page.navigate', { url: base + '/menu.html' });
   await waitFor(`document.querySelector('#product-results .menu-card')`);
+  assert.equal(await evaluate(`document.querySelector('[data-cart] svg')?.dataset.icon === 'cart-shopping'`),true,'Separate customer menu keeps cart controls');
   await evaluate(`document.querySelector('#product-results [data-quick-add]').click()`);
   await waitFor(`document.querySelector('.shop-dialog .shop-addon-picker input')`);
   await screenshot('product-details-mobile');
@@ -247,7 +286,35 @@ try {
   assert.equal(customerCheckoutCount, 0, 'Guest cannot place an order');
   await evaluate(`document.querySelector('[data-switch]').click()`);
   await waitFor(`document.querySelector('#customer-form')?.elements.name`);
-  await evaluate(`const form = document.querySelector('#customer-form'); form.elements.name.value = 'DEMONSTRATION customer'; form.elements.email.value = 'customer@example.test'; form.elements.password.value = 'Fixture password 12345'; form.requestSubmit()`);
+  for(const [width,height] of [[1366,768],[1280,720],[1024,600],[390,844],[360,640],[320,568],[844,390]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<761});await pause(50);
+    const fit=await evaluate('(()=>{const controls=[...document.querySelectorAll("#customer-form input,#customer-form .wide,.customer-form-switch")];return {noScroll:document.documentElement.scrollHeight<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth+1,visible:controls.every(node=>{const r=node.getBoundingClientRect();return r.height>0&&r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth;})};})()');
+    assert.deepEqual(fit,{noScroll:true,visible:true},'Registration fits '+width+'x'+height);
+  }
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await screenshot('customer-register-mobile');
+  results.push('Create Account fits laptop, mobile and landscape screens without scrolling or clipped controls');
+  await evaluate(`(()=>{const f=document.querySelector('#customer-form');f.elements.name.value='DEMONSTRATION customer';f.elements.email.value='customer@example.test';f.elements.password.value='Fixture password 12345';f.elements.confirmPassword.value='Different password 12345';f.requestSubmit()})()`);
+  await waitFor(`document.querySelector('[role=alertdialog]')`);
+  assert.equal(await evaluate(`document.querySelector('[role=alertdialog]').textContent.includes('Passwords do not match')`),true);
+  assert.equal(await evaluate(`!!document.querySelector('#customer-form [name=confirmPassword]')`),true);
+  await acknowledge();
+  await evaluate(`(()=>{const f=document.querySelector('#customer-form');f.elements.confirmPassword.value='Fixture password 12345';f.requestSubmit()})()`);
+  await waitFor(`document.querySelector('#customer-form [name=code]')`);
+  assert.equal(customerSignedIn,false,'Registration needs email confirmation before sign-in');
+  for(const [width,height] of [[1366,768],[1024,600],[390,844],[320,568],[844,390]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<761});await pause(50);
+    assert.equal(await evaluate('document.documentElement.scrollHeight<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth+1&&[...document.querySelectorAll("#customer-form input,#customer-form .wide,.verification-resend,.customer-form-switch")].every(n=>{const r=n.getBoundingClientRect();return r.height>0&&r.top>=0&&r.bottom<=innerHeight&&r.right<=innerWidth&&r.left>=0})'),true,'Confirmation code fits '+width+'x'+height);
+  }
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  results.push('Email code confirmation fits the screen and rejects wrong codes before account access');
+
+  await evaluate(`(()=>{const f=document.querySelector('#customer-form');f.elements.code.value='000000';f.requestSubmit()})()`);
+  await waitFor(`document.querySelector('.app-message-box') || document.querySelector('[role=alertdialog]')`);
+  await acknowledge();
+  assert.equal(customerSignedIn,false);
+  await screenshot('customer-confirmation-mobile');
+  await evaluate(`(()=>{const f=document.querySelector('#customer-form');f.elements.code.value='123456';f.requestSubmit()})()`);
   await waitFor(`document.querySelector('.shop-dialog .shop-form [name=contact]')`);
   await evaluate(`const form = document.querySelector('.shop-form'); form.elements.contact.value = '09000000000'; form.requestSubmit()`);
   await waitFor(`document.querySelector('[data-place]')`);
@@ -268,10 +335,64 @@ try {
   results.push('Guest product details and cart persist through reload and customer registration; authenticated checkout places one order');
   await evaluate(`document.querySelector('#product-query').value = 'no such product'; document.querySelector('#product-search').requestSubmit()`);
   await waitFor(`document.querySelector('#product-results').textContent.includes('No products found')`);
-  results.push('Landing page loads artwork, fits desktop/mobile and links to customer/staff login');
+  results.push('Separate customer menu preserves products, cart and checkout through shared sign-in');
   }
   if (!process.argv.includes('--storefront-only')) {
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  pushFixtureEnabled = true;
+  await navigate('notifications');
+  await evaluate('(()=>{window.fixturePermission="default";window.fixturePushCalls=0;window.fixtureUnsubscribed=0;window.fixtureSubscription=null;Object.defineProperty(Notification,"permission",{configurable:true,get:()=>window.fixturePermission});Notification.requestPermission=async()=>{window.fixturePermission="granted";return "granted";};PushManager.prototype.getSubscription=async()=>window.fixtureSubscription;PushManager.prototype.subscribe=async options=>{window.fixturePushCalls++;const current={endpoint:"https://fcm.googleapis.com/fcm/send/fixture-browser-"+window.fixturePushCalls,options,unsubscribe:async()=>{window.fixtureUnsubscribed++;window.fixtureSubscription=null;return true;},toJSON:()=>({endpoint:current.endpoint,expirationTime:null,keys:{p256dh:"fixture-public-key-12345678901234567890",auth:"fixture-auth-key-123456"}})};window.fixtureSubscription=current;return current;};})()');
+  await evaluate('document.querySelector("#push-preferences").requestSubmit()');
+  await waitFor('document.querySelector("[data-push-status]")?.textContent.includes("Push is enabled")');
+  await acknowledge();
+  assert.equal(await evaluate('window.fixturePushCalls'),1,'Enable waits for an active worker and registers the subscription');
+  assert.equal(await evaluate('window.fixtureSubscription.options.applicationServerKey.byteLength'),65,'The public VAPID key is decoded correctly');
+  await evaluate('(async()=>{const s=await import("/js/offline-store.js");const u=await s.activeUser();await s.cacheData(u.id,"push",{});document.querySelector("[data-refresh]").click();return true;})()');
+  await waitFor('document.querySelector("[data-test-push]") && !document.querySelector("[data-test-push]").disabled');
+  await evaluate('document.querySelector("[data-test-push]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("push service accepted")');
+  assert.equal(pushFixtureTests,1,'The Test button uses the server delivery endpoint');
+  await acknowledge();
+  await evaluate('window.fixturePermission="denied";document.querySelector("#push-preferences").requestSubmit()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("blocked")');
+  assert.equal(await evaluate('window.fixturePushCalls'),1,'Blocked permission never subscribes or reports success');
+  await acknowledge();
+  await evaluate('window.fixturePermission="granted";window.fixtureSubscription.options.applicationServerKey=new Uint8Array(65).buffer;document.querySelector("#push-preferences").requestSubmit()');
+  await waitFor('window.fixturePushCalls===2 && document.querySelector(".message-box[open]")?.textContent.includes("Push is enabled")');
+  await acknowledge();
+  assert.equal(await evaluate('window.fixtureUnsubscribed'),1,'A subscription using a different VAPID key is replaced');
+  const otherDevice = { id: randomUUID(), endpointKey: 'other-device', preferences: {} }; pushFixtureRecords.push(otherDevice);
+  await evaluate('document.querySelector("[data-unsubscribe]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("disabled on this browser")');
+  await acknowledge();
+  assert.ok(pushFixtureRecords.some(row=>row.id===otherDevice.id),'Unsubscribe preserves other devices');
+  assert.equal(await evaluate('window.fixtureSubscription'),null);
+  pushFixtureEnabled=false; pushFixtureRecords=[];
+  results.push('Push UI enables, reconciles server registration without local cache, tests delivery, handles denied permission, renews changed keys and unsubscribes only this device');
+  await navigate('audit');
+  await evaluate('document.querySelectorAll("[data-audit]")[0].click()');
+  await waitFor('document.querySelector(".audit-view")');
+  assert.equal(await evaluate('document.querySelector(".audit-view").textContent.includes("There is no previous version")'),true,'Creation explains why no before record exists');
+  assert.equal(await evaluate('Boolean(document.querySelector(".audit-view pre,.audit-view img"))'),false,'Audit details are readable and escaped');
+  assert.equal(await evaluate('document.querySelector(".audit-view").textContent.includes("DO-NOT-DISPLAY-FIXTURE")'),false,'Audit UI hides sensitive fields');
+  assert.equal(await evaluate('document.querySelector(".audit-view").textContent.includes("Paid") && document.querySelector(".audit-view").textContent.includes("200.00")'),true,'Amounts and paid balance remain visible');
+  await screenshot('audit-changes-desktop');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await evaluate('document.querySelector(".audit-modal").scrollWidth<=document.querySelector(".audit-modal").clientWidth+1'),true,'Audit details fit a mobile screen');
+  await screenshot('audit-changes-mobile');
+  await evaluate('document.querySelector(".audit-modal [data-close]").click()');
+  await waitFor('!document.querySelector(".audit-modal")');
+  await evaluate('document.querySelectorAll("[data-audit]")[1].click()');
+  await waitFor('document.querySelector(".audit-comparison")');
+  assert.equal(await evaluate('[...document.querySelectorAll(".audit-field dt")].some(item=>item.textContent==="Customer")'),false,'Unchanged fields are omitted from the comparison');
+  assert.equal(await evaluate('(()=>{const row=[...document.querySelectorAll(".audit-field")].find(item=>item.querySelector("dt")?.textContent==="Paid");return row.textContent.includes("0.00")&&row.textContent.includes("100.00");})()'),true,'Before/after paid values are displayed correctly');
+  assert.equal(await evaluate('document.querySelector(".audit-item-versions").textContent.includes("Qty 1") && document.querySelector(".audit-item-versions").textContent.includes("Qty 2")'),true,'Order item quantity changes are readable');
+  await evaluate('document.querySelector(".audit-modal [data-close]").click()');
+  await waitFor('!document.querySelector(".audit-modal")');
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  const auditEdgeCases = await evaluate('(async()=>{const {auditView}=await import("/js/audit-view.js");const base={createdAt:new Date().toISOString(),actor:{name:"Fixture staff"}};const printed=auditView({...base,action:"document.printed",before:null,after:{kind:"receipt"}});const amount=auditView({...base,action:"order.corrected",before:{total:"200.00"},after:{total:"200"}});return {action:printed.includes("Action recorded")&&!printed.includes("Record created"),numeric:!amount.includes("audit-field-panel")};})()');
+  assert.deepEqual(auditEdgeCases,{action:true,numeric:true},'Action-only events and equivalent money formats are described accurately');
+  results.push('Audit creation and updates show readable fields and item comparisons, hide sensitive data, escape text and fit mobile screens');
   archiveFixtureEnabled = true;
   await navigate('customers');
   await evaluate('document.querySelector("[data-archive]").click()');
@@ -348,6 +469,23 @@ try {
   results.push('Admin prepares offline drafts from the dashboard; save/edit/queue survive reload and reconnect submits exactly once');
   if (!process.argv.includes('--offline-drafts-only')) {
   for (const page of ['dashboard', 'pos', 'orders', 'kitchen', 'menu', 'customers', 'payments', 'reports', 'chat', 'notifications', 'archives', 'staff', 'audit', 'settings']) { await navigate(page); results.push('Rendered ' + page); }
+  await navigate('chat');
+  await evaluate('document.querySelector("[data-delete-conversation]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")');
+  assert.equal(staffChatDeletes,0,'Delete waits for confirmation');
+  await evaluate('document.querySelector("[data-message-cancel]").click()');
+  assert.equal(staffChatDeletes,0,'Cancel preserves the conversation');
+  await evaluate('document.querySelector("[data-delete-conversation]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")');
+  await evaluate('document.querySelector("[data-message-ok]").click()');
+  await waitFor('document.querySelector("[data-open-general]")');
+  assert.equal(staffChatDeletes,1,'Delete is submitted once');await acknowledge();
+  await send('Page.reload');await waitFor('document.querySelector("[data-open-general]")');
+  assert.equal(await evaluate('!!document.querySelector("[data-delete-conversation]")'),false,'Deleted conversation stays removed after reload');
+  await evaluate('document.querySelector("[data-open-general]").click()');
+  await waitFor('document.querySelector("[data-delete-conversation]")');
+  results.push('Staff chat Delete Conversation confirms, supports Cancel, deletes once, survives reload and reopens an empty general room');
+
   await navigate('dashboard');
   assert.equal(await evaluate(`[...document.querySelectorAll('.nav-item>svg')].every(svg=>svg.dataset.prefix==='fas' && svg.querySelector('path')?.getAttribute('d'))`), true, 'Staff navigation uses Font Awesome icons');
   results.push('Font Awesome UI icons render locally in storefront and staff navigation');
@@ -401,6 +539,7 @@ try {
   await screenshot('kitchen-role-fixture'); results.push('Kitchen staff sees only kitchen/chat/notifications; owner page links are rejected');
   mode = 'accept'; user.role = 'OWNER'; user.permissions = ownerPermissions;
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  staffSignedIn=false;customerSignedIn=true;
   await send('Page.navigate', { url: base + '/customer.html' });
   await waitFor(`document.querySelector('.login-card h2')?.textContent.includes('Welcome')`);
   await evaluate(`[...document.querySelectorAll('button')].find(button => button.textContent === 'Chat with staff').click()`);
@@ -416,48 +555,119 @@ try {
   await evaluate(`const form = document.querySelector('.support-conversation form'); form.elements.text.value = 'DEMONSTRATION staff confirms pickup'; form.requestSubmit()`);
   await waitFor(`document.querySelector('.support-conversation .chat-messages').textContent.includes('confirms pickup')`);
   await screenshot('staff-customer-inbox');
+  staffSignedIn=false;customerSignedIn=true;
   await send('Page.navigate', { url: base + '/customer.html' });
   await waitFor(`document.querySelector('.login-card h2')?.textContent.includes('Welcome')`);
   await evaluate(`[...document.querySelectorAll('button')].find(button => button.textContent === 'Chat with staff').click()`);
   await waitFor(`document.querySelector('.customer-support .chat-messages')?.textContent.includes('confirms pickup')`);
   assert.equal(supportMessages.length, 2);
   results.push('Customer chat fits mobile, sends messages, staff inbox replies and customer sees saved reply');
-  mode = 'expired'; user.role = 'OWNER'; user.permissions = ownerPermissions;
-  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await send('Page.navigate', { url: base + '/staff.html' });
-  await waitFor(`document.querySelector('[data-register-staff]')`);
-  await screenshot('staff-signin-mobile');
-  await evaluate(`document.querySelector('[data-toggle-password]').click()`);
-  assert.equal(await evaluate(`document.querySelector('#login-form [name=password]').type`), 'text');
-  await evaluate(`document.querySelector('[data-toggle-password]').click()`);
-  assert.equal(await evaluate(`document.querySelector('#login-form [name=password]').type`), 'password');
-  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-  await screenshot('staff-signin-desktop');
-  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await evaluate(`document.querySelector('[data-register-staff]').click()`);
-  await waitFor(`document.querySelector('#staff-registration-form')`);
-  await screenshot('staff-registration-mobile');
-  await evaluate(`const form = document.querySelector('#staff-registration-form'); form.elements.name.value = 'DEMONSTRATION new staff'; form.elements.email.value = 'new-staff@example.test'; form.elements.password.value = 'Fixture staff password'; form.elements.confirmPassword.value = 'Different password'; form.requestSubmit()`);
-  await waitFor(`document.querySelector('#staff-registration-form [data-error]').textContent.includes('Passwords do not match')`);
+  mode='accept';user.role='OWNER';user.permissions=ownerPermissions;staffSignedIn=false;customerSignedIn=false;
+  await send('Page.navigate',{url:base+'/staff.html'});
+  await waitFor('location.pathname==="/login.html" && document.querySelector("#customer-form")');
   await acknowledge();
-  await evaluate(`const signup = document.querySelector('#staff-registration-form'); signup.elements.confirmPassword.value = signup.elements.password.value; signup.requestSubmit()`);
-  await waitFor(`document.querySelector('.login-card .notice')?.textContent.includes('submitted')`);
+  assert.equal(await evaluate('document.querySelectorAll("form").length===1 && !document.querySelector("[data-register-staff],#staff-registration-form,select[name=role]")'),true,'One sign-in form has no public staff signup or role selector');
+  for(const [width,height] of [[1366,768],[1280,720],[1024,600],[390,844],[360,640],[320,568],[844,390]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<761});await pause(50);
+    const fit=await evaluate('(()=>{const card=document.querySelector(".shared-sign-in"),box=card.getBoundingClientRect();const controls=[...document.querySelectorAll(".shared-sign-in .login-back-home,.shared-sign-in h2,#customer-form input,#customer-form .wide,.shared-sign-in .customer-form-switch")];return {noScroll:document.documentElement.scrollHeight<=innerHeight+1&&document.documentElement.scrollWidth<=innerWidth+1,visible:controls.every(node=>{const r=node.getBoundingClientRect();return r.height>0&&r.top>=box.top&&r.bottom<=box.bottom&&r.left>=0&&r.right<=innerWidth;})};})()');
+    assert.deepEqual(fit,{noScroll:true,visible:true},'Login fits '+width+'x'+height+' without scrolling or clipping controls');
+  }
+  results.push('Shared login fits laptop, small mobile and landscape screens without scrolling or clipping actions');
+  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});await screenshot('staff-signin-desktop');
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await screenshot('staff-signin-mobile');
+  await evaluate('document.querySelector("[data-toggle-password]").click()');
+  assert.equal(await evaluate('document.querySelector("#customer-form [name=password]").type'),'text');
+  await evaluate('document.querySelector("[data-toggle-password]").click()');
+  await evaluate('(()=>{const f=document.querySelector("#customer-form");f.elements.email.value="fixture@example.test";f.elements.password.value="Fixture owner password";f.requestSubmit();})()');
+  await waitFor('document.querySelector("#breadcrumb-page")?.textContent==="Dashboard"');
+  await navigate('staff');await evaluate('document.querySelector("[data-add]").click()');await waitFor('document.querySelector(".record-form")');
+  assert.equal(await evaluate('!!document.querySelector(".record-form [name=password]")'),false,'New staff accounts use default password without password entry');
+  await evaluate('(()=>{const f=document.querySelector(".record-form");f.elements.name.value="DEMONSTRATION new staff";f.elements.email.value="new-staff@example.test";f.elements.role.value="KITCHEN";f.requestSubmit();})()');
+  await waitFor('!document.querySelector(".record-form")');await acknowledge();
+  assert.equal(staffAccounts.length,1);assert.equal(staffAccounts[0].role,'KITCHEN');assert.equal(staffAccounts[0].active,true);
+  assert.equal(await evaluate('Boolean(document.querySelector("[data-staff-status=pending]"))'),false);
+  await evaluate('(async()=>{const store=await import("/js/offline-store.js");const u=await store.activeUser();await store.saveDraft({id:"switch-protection",userId:u.id,status:"LOCAL",operationId:crypto.randomUUID(),payload:{},snapshot:{total:"0.00"}});return true;})()');
+  staffSignedIn=false;customerSignedIn=false;await send('Page.navigate',{url:base+'/login.html'});await waitFor('document.querySelector("#customer-form")');
+  await evaluate('(()=>{const f=document.querySelector("#customer-form");f.elements.email.value="new-staff@example.test";f.elements.password.value="Fixture staff password 1234";f.requestSubmit();})()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")?.textContent.includes("unsynchronized draft")');
+  await evaluate('document.querySelector("[data-message-cancel]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("Sign-in canceled")');await acknowledge();
+  assert.equal(await evaluate('(async()=>{const store=await import("/js/offline-store.js");return Boolean(await store.getDraft("switch-protection"));})()'),true,'Cancel keeps the previous account drafts');
+  await evaluate('(()=>{const f=document.querySelector("#customer-form");f.elements.email.value="fixture@example.test";f.elements.password.value="Fixture owner password";f.requestSubmit();})()');
+  await waitFor('document.querySelector("#breadcrumb-page")?.textContent==="Dashboard"');
+  await evaluate('(async()=>{const store=await import("/js/offline-store.js");const u=await store.activeUser();await store.deleteDraft(u.id,"switch-protection");return true;})()');
+  staffSignedIn=false;customerSignedIn=false;await send('Page.navigate',{url:base+'/login.html'});await waitFor('document.querySelector("#customer-form")');
+  await evaluate('(()=>{const f=document.querySelector("#customer-form");f.elements.email.value="new-staff@example.test";f.elements.password.value="Fixture staff password 1234";f.requestSubmit();})()');
+  await waitFor('document.querySelector("#breadcrumb-page")?.textContent==="Kitchen Display"');
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".nav-item")].map(item=>item.dataset.nav).sort()'),['chat','kitchen','notifications']);
+  results.push('One login routes customers, owners and admin-created kitchen accounts automatically; public staff signup is removed');
+
+  await navigate('dashboard');
+  const logoutBefore=staffLogoutCount;
+  await evaluate('document.querySelector("[data-logout]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")?.textContent.includes("sign out")');
+  assert.equal(staffLogoutCount,logoutBefore,'Staff sign-out waits for confirmation even with no pending drafts');
+  await evaluate('document.querySelector("[data-message-cancel]").click()');
+  assert.equal(staffLogoutCount,logoutBefore,'Cancel keeps the staff session');
+  assert.equal(await evaluate('Boolean(document.querySelector(".sidebar"))'),true);
+  await evaluate('document.querySelector("[data-logout]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")');
+  await evaluate('document.querySelector("[data-message-ok]").click()');
+  await waitFor('location.pathname==="/login.html" && document.querySelector("#customer-form")');
+  assert.equal(staffLogoutCount,logoutBefore+1,'Confirm signs staff out exactly once');
   await acknowledge();
-  assert.equal(staffSignup.active, false);
-  mode = 'accept';
-  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-  await navigate('staff');
-  await evaluate(`document.querySelector('[data-staff-status=pending]').click()`);
-  await waitFor(`document.querySelector('[data-decision=approve]')`);
-  await screenshot('staff-pending-approval');
-  await evaluate(`document.querySelector('[data-decision=approve]').click()`);
-  await waitFor(`document.querySelector('dialog form [name=role]')`);
-  await evaluate(`const approve = document.querySelector('dialog form'); approve.elements.role.value = 'KITCHEN'; approve.requestSubmit()`);
-  await waitFor(`!document.querySelector('[data-decision=approve]') && !document.querySelector('dialog.modal')`);
-  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("Staff account approved")');
+  customerSignedIn=true;staffSignedIn=false;
+  await send('Page.navigate',{url:base+'/customer.html'});
+  await waitFor('document.querySelector("[data-logout]")');
+  await evaluate('document.querySelector("[data-logout]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")');
+  assert.equal(customerLogoutCount,0,'Customer sign-out also waits for confirmation');
+  await evaluate('document.querySelector("[data-message-cancel]").click()');
+  assert.equal(customerLogoutCount,0,'Cancel keeps the customer session');
+  await evaluate('document.querySelector("[data-logout]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")');
+  await evaluate('document.querySelector("[data-message-ok]").click()');
+  await waitFor('document.querySelector("#customer-form")');
+  assert.equal(customerLogoutCount,1,'Confirm signs the customer out exactly once');
+  results.push('Staff and customer Sign out always require confirmation; Cancel keeps the session and Sign out submits exactly once');
+  await evaluate('(()=>{const f=document.querySelector("#customer-form");f.elements.email.value="fixture@example.test";f.elements.password.value="Fixture owner password";f.requestSubmit();})()');
+  await waitFor('document.querySelector("#breadcrumb-page")?.textContent==="Dashboard"');
+  await evaluate('(async()=>{const s=await import("/js/offline-store.js");const u=await s.activeUser();await s.saveDraft({id:"history-protection",userId:u.id,status:"LOCAL",operationId:crypto.randomUUID(),payload:{},snapshot:{total:"0.00"}});return true;})()');
+  const dashboardHistory = await send('Page.getNavigationHistory');
+  const dashboardEntry = dashboardHistory.entries[dashboardHistory.currentIndex].id;
+  const beforeLandingLogout = staffLogoutCount;
+  await settleSynchronizer();
+  await send('Page.navigate',{url:base+'/'});
+  await waitFor('document.querySelector("#information")');
+  await waitFor('localStorage.getItem("bite-brew-workspace-locked")!==null');
+  for(let i=0;i<50&&staffSignedIn;i++)await pause(50);
+  assert.equal(staffSignedIn,false,'Landing revokes the staff session');
+  assert.equal(staffLogoutCount,beforeLandingLogout+1);
+  assert.equal(await evaluate('(async()=>{const s=await import("/js/offline-store.js");return !!await s.getDraft("history-protection")&&(await s.syncDrafts()).paused===true;})()'),true,'Landing retains drafts and pauses background sync');
+  const landingHistory = await send('Page.getNavigationHistory');
+  const landingEntry = landingHistory.entries[landingHistory.currentIndex].id;
+  await send('Page.navigateToHistoryEntry',{entryId:dashboardEntry});
+  await waitFor('location.pathname==="/login.html"&&!document.querySelector(".sidebar")');
+  await send('Page.navigateToHistoryEntry',{entryId:landingEntry});
+  await waitFor('document.querySelector("#information")');
+  await send('Page.reload');await waitFor('document.querySelector("#information")');
+  await send('Page.navigate',{url:base+'/staff.html?page=dashboard'});
+  await waitFor('location.pathname==="/login.html"&&!document.querySelector(".sidebar")');
+  await send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+  await send('Page.navigate',{url:base+'/staff.html?page=dashboard'});
+  await waitFor('location.pathname==="/login.html"&&!document.querySelector(".sidebar")');
+  await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+  await send('Page.reload');await waitFor('document.querySelector("#customer-form")');
   await acknowledge();
-  assert.equal(staffSignup.active, true); assert.equal(staffSignup.role, 'KITCHEN');
-  results.push('Staff registration validates passwords, stays pending and is approved with an owner-assigned role');
+  await evaluate('(()=>{const f=document.querySelector("#customer-form");f.elements.email.value="fixture@example.test";f.elements.password.value="Fixture owner password";f.requestSubmit();})()');
+  await waitFor('document.querySelector("#breadcrumb-page")?.textContent==="Dashboard"');
+  assert.equal(await evaluate('(async()=>{const s=await import("/js/offline-store.js");return !!await s.getDraft("history-protection");})()'),true,'Explicit sign-in restores access to the original drafts');
+  staffSignedIn=false;
+  assert.equal(await evaluate('window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));document.querySelector("#app").hidden&&document.body.style.visibility==="hidden"'),true,'Restored private content stays hidden while checking the session');
+  await waitFor('location.pathname==="/login.html"&&!document.querySelector(".sidebar")');
+  results.push('Landing revokes staff access; real Back/Forward, reload, direct URLs, offline fallback and restored pages cannot reopen the workspace; explicit login retains drafts');
+
+
   }
   }
   assert.deepEqual(nativeDialogs, [], 'App workflows must not open native browser alerts or confirmations');

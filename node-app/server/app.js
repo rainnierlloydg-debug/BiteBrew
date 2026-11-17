@@ -14,7 +14,7 @@ import { overdueNotifications, deliverPush } from './services/notifications.js';
 import { z } from 'zod';
 import { applyBranding } from './services/branding.js';
 
-export async function createApplication({ jobs = true } = {}) {
+export async function createApplication({ jobs = true, verificationOptions } = {}) {
   validateEnvironment(); await db.$connect();
   await applyBranding();
   const app = express();
@@ -24,7 +24,7 @@ export async function createApplication({ jobs = true } = {}) {
   app.use(sessionMiddleware);
   const server = createServer(app), io = attachRealtime(server);
   app.get('/health', async (req, res, next) => { try { await db.$queryRaw`SELECT 1`; res.set('Cache-Control', 'no-store').json({ status: 'ok', database: 'connected' }); } catch (error) { next(error); } });
-  app.use('/api', rateLimit({ windowMs: 60000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false }), apiRoutes(io));
+  app.use('/api', rateLimit({ windowMs: 60000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false }), apiRoutes(io, verificationOptions));
   app.use('/api', (req, res, next) => next(Object.assign(new Error('API endpoint not found.'), { status: 404, code: 'NOT_FOUND' })));
   app.use('/uploads', authenticated, (req, res, next) => { res.set('Cache-Control', 'private, max-age=3600'); next(); }, express.static(config.uploads, { dotfiles: 'deny', index: false, fallthrough: false }));
   app.get('/documents/orders/:id/:kind', authenticated, async (req, res, next) => {
@@ -42,8 +42,12 @@ export async function createApplication({ jobs = true } = {}) {
   let running = false;
   const tick = async () => {
     if (running) return; running = true;
-    try { await overdueNotifications(); await deliverPush(); await db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }); } catch (error) { console.error('Background task failed:', error.code || error.name); } finally { running = false; }
+    try {
+      const results = await Promise.allSettled([overdueNotifications(), deliverPush(), db.customerVerification.deleteMany({ where: { expiresAt: { lt: new Date() } } }), db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } })]);
+      for (const result of results) if (result.status === 'rejected') console.error('Background task failed:', result.reason.code || result.reason.name);
+    } finally { running = false; }
   };
   const timer = jobs ? setInterval(tick, 15000) : null; timer?.unref();
+  if (jobs) queueMicrotask(tick);
   return { app, server, io, async close() { if (timer) clearInterval(timer); await new Promise(resolve => io.close(resolve)); if (server.listening) await new Promise(resolve => server.close(resolve)); await db.$disconnect(); } };
 }

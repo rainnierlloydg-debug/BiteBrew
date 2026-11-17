@@ -72,6 +72,21 @@ model User {
   @@map("users")
 }
 
+model CustomerVerification {
+  id           String   @id @default(uuid()) @db.Char(36)
+  email        String   @unique @db.VarChar(190)
+  name         String   @db.VarChar(120)
+  contact      String   @db.VarChar(40)
+  passwordHash String   @db.VarChar(255)
+  tokenHash    String   @unique @db.Char(64)
+  codeHash     String   @db.Char(64)
+  attempts     Int      @default(0)
+  sentAt       DateTime @db.DateTime(3)
+  expiresAt    DateTime @db.DateTime(3)
+  @@index([expiresAt])
+  @@map("customer_verifications")
+}
+
 model Session {
   id        String   @id @db.VarChar(128)
   data      Json
@@ -479,6 +494,8 @@ model ChatParticipant {
   userId            String   @db.Char(36)
   user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   lastReadMessageId Int      @default(0)
+  hidden            Boolean  @default(false)
+  clearedThroughMessageId Int @default(0)
   joinedAt          DateTime @default(now()) @db.DateTime(3)
   @@id([roomId, userId])
   @@index([userId])

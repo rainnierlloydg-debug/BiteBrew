@@ -134,7 +134,7 @@ export function showCart(message = '') {
   return node;
 }
 function signInForCheckout() {
-  location.assign('/customer.html?next=checkout');
+  location.assign('/login.html?next=checkout');
 }
 export async function showCheckout() {
   if (!readCart().length) return showCart();
@@ -195,7 +195,7 @@ export function initStorefront() {
   cart?.addEventListener('click', openCart);
   updateCartCount(); window.addEventListener('storage', updateCartCount);
   if (new URLSearchParams(location.search).get('checkout') === '1') {
-    history.replaceState(null, '', '/#menu'); showCheckout();
+    history.replaceState(null, '', '/menu.html#menu'); showCheckout();
   }
   return () => { cart?.removeEventListener('click', openCart); window.removeEventListener('storage', updateCartCount); };
 }

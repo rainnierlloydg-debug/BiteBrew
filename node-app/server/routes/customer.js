@@ -8,9 +8,9 @@ import { hashPassword, verifyPassword } from '../lib/password.js';
 import { fail } from '../lib/errors.js';
 import { customerQuote, checkout } from '../services/customer-checkout.js';
 import * as support from '../services/support-chat.js';
+import { registrationService } from '../services/registration.js';
 
 const credentials = z.object({ email: z.email().max(190).transform(value => value.toLowerCase().trim()), password: z.string().min(1).max(128) }).strict();
-const registration = credentials.extend({ name: z.string().trim().min(1).max(120), contact: z.string().trim().max(40), password: z.string().min(12).max(128) });
 const dummy = await hashPassword(randomUUID());
 const handle = fn => async (req, res, next) => { try { const result = await fn(req); res.json(result?.meta ? result : { data: result }); } catch (error) { next(error); } };
 const safe = account => ({ id: account.id, name: account.customer.name, email: account.email });
@@ -19,7 +19,8 @@ async function accountFor(req) {
   if (!account || !account.customer.active || account.customer.archivedAt) return null;
   return account;
 }
-export function customerRoutes() {
+export function customerRoutes(verificationOptions) {
+  const registration = registrationService(verificationOptions);
   const router = Router();
   router.get('/session', handle(async req => { const account = await accountFor(req); csrfToken(req); await saveSession(req); return { customer: account ? safe(account) : null, csrf: csrfToken(req) }; }));
   const limiter = rateLimit({ windowMs: 900000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false });
@@ -34,9 +35,11 @@ export function customerRoutes() {
     await saveSession(req);
     return { customer: safe(account), csrf: csrfToken(req) };
   }));
-  router.post('/register', csrfProtection, limiter, handle(async req => {
-    const data = registration.parse(req.body), passwordHash = await hashPassword(data.password);
-    const account = await db.customerAccount.create({ data: { email: data.email, passwordHash, customer: { create: { name: data.name, contact: data.contact || null } } }, include: { customer: true } });
+  router.post('/register', csrfProtection, limiter, handle(req => registration.start(req.body)));
+  router.post('/register/resend', csrfProtection, limiter, handle(req => registration.resend(req.body)));
+  const codeLimiter = rateLimit({ windowMs: 900000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
+  router.post('/register/verify', csrfProtection, codeLimiter, handle(async req => {
+    const account = await registration.verify(req.body);
     // Never attach to existing orders by matching a name or phone number.
     await regenerateSession(req);
     req.session.customerAccountId = account.id;

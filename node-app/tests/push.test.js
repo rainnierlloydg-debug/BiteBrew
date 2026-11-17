@@ -1,0 +1,104 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { randomUUID, randomBytes } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import webpush from 'web-push';
+import vm from 'node:vm';
+import { pushTarget } from '../public/shared/push-target.js';
+import { BRAND, brandText } from '../public/shared/brand.js';
+
+if (fs.existsSync('.env')) process.loadEnvFile('.env');
+
+test('push links stay on the staff workspace and reject external or unsupported targets', () => {
+  const origin = 'http://127.0.0.1:3000', order = randomUUID();
+  assert.equal(pushTarget('/?page=kitchen&order=' + order, origin), '/staff.html?page=kitchen&order=' + order);
+  assert.equal(pushTarget('/staff.html?page=notifications', origin), '/staff.html?page=notifications');
+  for (const url of ['https://example.com/?page=orders', '//example.com/staff.html', '/customer.html', '/?page=staff', '/logout', 'javascript:alert(1)']) assert.equal(pushTarget(url, origin), '/staff.html?page=notifications');
+  assert.equal(pushTarget('/?page=orders&order=invalid', origin), '/staff.html?page=orders');
+});
+
+test('service worker displays the payload and focuses the staff tab without redirecting a customer tab', async () => {
+  const listeners = {}, shown = [], messages = [], opened = [];
+  let focused = false, closed = false, pending;
+  const origin = 'http://127.0.0.1:3000';
+  const staff = { url: origin + '/staff.html?page=pos', visibilityState: 'visible', focus: async () => { focused = true; }, postMessage: message => messages.push(message) };
+  const customer = { url: origin + '/customer.html', visibilityState: 'visible', postMessage: () => assert.fail('Staff push must not be exposed to the customer screen') };
+  const self = { location: { origin }, addEventListener: (type, handler) => { listeners[type] = handler; }, clients: { matchAll: async () => [customer, staff], openWindow: async url => opened.push(url) }, registration: { showNotification: async (title, options) => shown.push({ title, options }) } };
+  const source = fs.readFileSync('public/sw.js', 'utf8').replace(/^import .+\r?\n/gm, '');
+  vm.runInNewContext(source, { self, URL, BRAND, brandText, pushTarget });
+  const order = randomUUID(), payload = { title: BRAND.name, body: 'Test notification: push is working on this browser.', tag: 'fixture-push', url: '/?page=orders&order=' + order };
+  listeners.push({ data: { json: () => payload }, waitUntil: value => { pending = value; } }); await pending;
+  assert.equal(shown[0].title, BRAND.name); assert.equal(shown[0].options.body, payload.body);
+  assert.equal(shown[0].options.data.url, '/staff.html?page=orders&order=' + order);
+  assert.equal(messages[0].type, 'PUSH_NOTIFICATION'); assert.equal(messages[0].body, payload.body);
+  listeners.notificationclick({ notification: { data: shown[0].options.data, close: () => { closed = true; } }, waitUntil: value => { pending = value; } }); await pending;
+  assert.equal(closed, true); assert.equal(focused, true); assert.equal(opened.length, 0);
+  assert.equal(messages.at(-1).type, 'OPEN_PUSH_NOTIFICATION');
+  self.clients.matchAll = async () => [customer];
+  listeners.notificationclick({ notification: { data: { url: 'https://example.com/' }, close() {} }, waitUntil: value => { pending = value; } }); await pending;
+  assert.equal(opened[0], origin + '/staff.html?page=notifications');
+});
+
+const testUrl = process.env.TEST_DATABASE_URL;
+test('Web Push subscription ownership, real outbox persistence, retries and expiration', { skip: !testUrl || testUrl.includes('CHANGE_ME') ? 'Configure TEST_DATABASE_URL for push integration.' : false, timeout: 90000 }, async t => {
+  assert.ok(new URL(testUrl).pathname.endsWith('_test'));
+  assert.notEqual(testUrl, process.env.DATABASE_URL);
+  process.env.DATABASE_URL = testUrl;
+  const migration = spawnSync(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], { env: process.env, encoding: 'utf8' });
+  assert.equal(migration.status, 0, 'Test database migrations succeed');
+  const [{ db }, push] = await Promise.all([import('../server/db.js'), import('../server/services/notifications.js')]);
+  const keys = webpush.generateVAPIDKeys();
+  process.env.VAPID_PUBLIC_KEY = keys.publicKey; process.env.VAPID_PRIVATE_KEY = keys.privateKey; process.env.VAPID_SUBJECT = 'mailto:fixture@example.test';
+  const owner = await db.user.create({ data: { name: 'DEMONSTRATION push owner', email: randomUUID() + '@example.test', passwordHash: 'fixture-only-not-a-login', role: 'OWNER' } });
+  const kitchen = await db.user.create({ data: { name: 'DEMONSTRATION push kitchen', email: randomUUID() + '@example.test', passwordHash: 'fixture-only-not-a-login', role: 'KITCHEN' } });
+  t.after(async () => {
+    await db.notification.deleteMany({ where: { userId: { in: [owner.id, kitchen.id] } } });
+    await db.pushSubscription.deleteMany({ where: { userId: { in: [owner.id, kitchen.id] } } });
+    await db.user.deleteMany({ where: { id: { in: [owner.id, kitchen.id] } } });
+    await db.$disconnect();
+  });
+  const input = () => ({ subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/fixture-' + randomUUID(), expirationTime: null, keys: { p256dh: webpush.generateVAPIDKeys().publicKey, auth: randomBytes(16).toString('base64url') } }, preferences: { ready: true, 'refund-request': true } });
+  const payload = input(), subscription = await push.subscribe(owner, payload);
+  assert.equal(push.pushConfiguration().enabled, true);
+  await assert.rejects(push.subscribe(kitchen, payload), { code: 'PUSH_ACCOUNT' });
+  await assert.rejects(push.subscribe(owner, { ...payload, subscription: { ...payload.subscription, endpoint: 'https://example.com/push' } }), { code: 'PUSH_ENDPOINT' });
+  await assert.rejects(push.testPush(kitchen, { subscriptionId: subscription.id }, async () => { throw new Error('Must not send'); }), { code: 'PUSH_SUBSCRIPTION' });
+  const sent = [];
+  const send = async (target, body, options) => { sent.push({ endpoint: target.endpoint, data: JSON.parse(body), options }); };
+  assert.equal((await push.testPush(owner, { subscriptionId: subscription.id }, send)).status, 'SENT');
+  assert.equal(sent.length, 1); assert.match(sent[0].data.body, /Test notification/); assert.equal(sent[0].options.timeout, 10000);
+  const accepted = await db.pushDelivery.findFirst({ where: { subscriptionId: subscription.id }, include: { notification: true } });
+  assert.equal(accepted.status, 'SENT'); assert.equal(accepted.attempts, 1);
+  await push.deliverPush(send, { ids: [accepted.id] }); assert.equal(sent.length, 1, 'Accepted pushes are not sent twice');
+  const queue = async (sub = subscription, actor = owner, kind = 'ready') => {
+    const notification = await db.notification.create({ data: { userId: actor.id, eventKey: randomUUID(), kind, title: 'Bite & Brew', body: 'DEMONSTRATION push fixture', url: '/staff.html?page=notifications' } });
+    return db.pushDelivery.create({ data: { subscriptionId: sub.id, notificationId: notification.id } });
+  };
+  const retry = await queue();
+  await push.deliverPush(async () => { throw Object.assign(new Error('Fixture temporary failure'), { statusCode: 503 }); }, { ids: [retry.id] });
+  let row = await db.pushDelivery.findUnique({ where: { id: retry.id } });
+  assert.equal(row.status, 'PENDING'); assert.equal(row.attempts, 1); assert.ok(row.nextAttemptAt > new Date());
+  await db.pushDelivery.update({ where: { id: retry.id }, data: { nextAttemptAt: new Date(0) } });
+  await push.deliverPush(send, { ids: [retry.id] });
+  row = await db.pushDelivery.findUnique({ where: { id: retry.id } });
+  assert.equal(row.status, 'SENT'); assert.equal(row.attempts, 2);
+  const rejected = await queue();
+  await push.deliverPush(async () => { throw Object.assign(new Error('Fixture forbidden'), { statusCode: 403 }); }, { ids: [rejected.id] });
+  assert.equal((await db.pushDelivery.findUnique({ where: { id: rejected.id } })).status, 'FAILED');
+  const interrupted = await queue();
+  await db.pushDelivery.update({ where: { id: interrupted.id }, data: { status: 'SENDING', attempts: 5, nextAttemptAt: new Date(0) } });
+  await push.deliverPush(send, { ids: [interrupted.id] });
+  assert.equal((await db.pushDelivery.findUnique({ where: { id: interrupted.id } })).status, 'FAILED');
+  const kitchenSub = await push.subscribe(kitchen, input());
+  assert.equal(kitchenSub.preferences['refund-request'], undefined, 'Kitchen cannot opt into finance notifications');
+  const skipped = await queue(kitchenSub, kitchen, 'refund-request'), before = sent.length;
+  await push.deliverPush(send, { ids: [skipped.id] });
+  assert.equal(sent.length, before); assert.equal((await db.pushDelivery.findUnique({ where: { id: skipped.id } })).status, 'SKIPPED');
+  const expired = await queue(kitchenSub, kitchen, 'new-order');
+  await push.deliverPush(async () => { throw Object.assign(new Error('Fixture expired'), { statusCode: 410 }); }, { ids: [expired.id] });
+  assert.equal(await db.pushSubscription.findUnique({ where: { id: kitchenSub.id } }), null);
+  assert.equal(await db.pushDelivery.count({ where: { subscriptionId: kitchenSub.id } }), 0, 'Expired endpoint deliveries are removed with their subscription');
+  process.env.VAPID_PUBLIC_KEY = webpush.generateVAPIDKeys().publicKey;
+  assert.equal(push.pushConfiguration().enabled, false, 'Mismatched VAPID keys are reported as unavailable');
+});

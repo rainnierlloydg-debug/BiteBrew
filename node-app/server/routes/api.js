@@ -31,13 +31,13 @@ const handle = fn => async (req, res, next) => { try { const result = await fn(r
 const id = value => z.uuid().parse(value);
 const key = req => z.uuid().parse(req.get('x-operation-id'));
 const uploads = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024, files: 1, fields: 1 } });
-export function apiRoutes(io) {
+export function apiRoutes(io, verificationOptions) {
   const router = Router();
   router.use((req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); });
   router.get('/session', handle(auth.sessionInfo));
   router.use('/public', publicRoutes());
-  router.use('/customer', customerRoutes());
-  router.post('/staff/register', csrfProtection, rateLimit({ windowMs: 900000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false }), handle(auth.registerStaff));
+  router.use('/customer', customerRoutes(verificationOptions));
+  router.post('/staff/register', handle(() => fail(410, 'STAFF_REGISTRATION_DISABLED', 'Staff accounts are created by the administrator. Contact your administrator for access.')));
   router.post('/login', csrfProtection, rateLimit({ windowMs: 900000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, handler: (req, res) => res.status(429).json({ error: { code: 'LOGIN_RATE', message: 'Too many login attempts. Wait 15 minutes before retrying.' } }) }), handle(auth.login));
   router.use(authenticated, csrfProtection);
   router.get('/chat/customers', permit('chat'), handle(req => support.conversations(req.query)));
@@ -99,13 +99,15 @@ export function apiRoutes(io) {
   router.get('/notifications', permit('notifications'), handle(req => notifications.notificationList(req.user, req.query)));
   router.post('/notifications/read', permit('notifications'), handle(async req => { const { ids } = z.object({ ids: z.array(z.uuid()).max(100) }).parse(req.body); await db.notification.updateMany({ where: { id: { in: ids }, userId: req.user.id }, data: { readAt: new Date() } }); return { read: ids.length }; }));
   router.post('/push/subscriptions', permit('notifications'), handle(req => notifications.subscribe(req.user, req.body)));
-  router.get('/push/subscriptions', permit('notifications'), handle(async req => db.pushSubscription.findMany({ where: { userId: req.user.id }, select: { id: true, preferences: true, createdAt: true } })));
+  router.get('/push/subscriptions', permit('notifications'), handle(async req => db.pushSubscription.findMany({ where: { userId: req.user.id }, select: { id: true, endpointKey: true, preferences: true, createdAt: true } })));
+  router.post('/push/test', permit('notifications'), handle(req => notifications.testPush(req.user, req.body)));
   router.delete('/push/subscriptions/:id', permit('notifications'), handle(req => notifications.unsubscribe(req.user, id(req.params.id))));
   router.delete('/push/subscriptions', permit('notifications'), handle(req => notifications.unsubscribe(req.user)));
   router.get('/chat/rooms', permit('chat'), handle(req => chat.roomList(req.user, req.query)));
-  router.post('/chat/rooms', permit('chat'), handle(req => { const { orderId } = z.object({ orderId: z.uuid().nullish() }).strict().parse(req.body); return chat.ensureRoom(req.user, orderId || null); }));
+  router.post('/chat/rooms', permit('chat'), handle(req => { const { orderId } = z.object({ orderId: z.uuid().nullish() }).strict().parse(req.body); return chat.ensureRoom(req.user, orderId || null, { reopen: true }); }));
+  router.post('/chat/rooms/:id/delete', permit('chat'), handle(async req => { const result = await chat.deleteConversation(req.user, key(req), id(req.params.id)); io.to('user:' + req.user.id).emit('invalidate', { topic: 'chat' }); return result; }));
   router.get('/chat/rooms/:id/messages', permit('chat'), handle(req => chat.messageHistory(req.user, id(req.params.id), req.query)));
-  router.post('/chat/messages', permit('chat'), handle(async req => { const result = await chat.sendMessage(req.user, req.body); io.to('chat:' + result.roomId).emit('message:new', result); return result; }));
+  router.post('/chat/messages', permit('chat'), handle(async req => { const result = await chat.sendMessage(req.user, req.body); io.to('chat:' + result.roomId).emit('message:new', result); io.to('role:OWNER').to('role:CASHIER').to('role:KITCHEN').emit('invalidate', { topic: 'chat' }); return result; }));
   router.post('/chat/rooms/:id/read', permit('chat'), handle(req => chat.markRead(req.user, id(req.params.id), req.body)));
   router.post('/documents/:id/printed', handle(async req => { const { kind } = z.object({ kind: z.enum(['receipt', 'kitchen']) }).strict().parse(req.body); if (req.user.role === 'KITCHEN' && kind !== 'kitchen') fail(403, 'FORBIDDEN', 'Kitchen staff cannot print receipts.'); await orders.orderView(db, id(req.params.id), req.user); await audit(db, req.user, 'document.printed', 'orders', req.params.id, null, { kind }); return { recorded: true }; }));
   return router;

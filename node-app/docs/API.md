@@ -14,12 +14,12 @@ Send a stable `X-Operation-ID` UUID on order/menu/staff/settings/payment/refund/
 
 | Method | Endpoint | Access / input |
 |---|---|---|
-| GET | `/session` | Public; current safe user/null and CSRF |
-| POST | `/login` | `{email,password}`; 10 attempts / 15 minutes per IP |
-| POST | `/staff/register` | Public with CSRF; `{name,email,password}`; role is assigned by the owner on approval; 5 requests / 15 minutes. Creates an inactive, pending account without a session. Duplicate emails never overwrite credentials. |
-| GET | `/staff?status=pending` | Owner only; paginated pending registrations, without password hashes |
+| GET | `/session` | Public; safe staff `user` or `customer`, account type, destination and CSRF |
+| POST | `/login` | Shared login: `{email,password}` only; detects customer/Owner/Cashier/Kitchen and returns `accountType` and `redirectTo`. 10 attempts / 15 minutes per IP. |
+| POST | `/staff/register` | Disabled; returns 410. Staff accounts are created by the owner through `POST /staff`. |
+| GET | `/staff?status=pending` | Owner-only compatibility access to historical pending accounts; new staff signup is disabled |
 | POST | `/staff/:id/review-registration` | Owner only; `{action:"approve"|"reject",role?:"CASHIER"|"KITCHEN"}` with CSRF and stable operation ID. Approval enables login; rejection archives the inactive account. |
-| POST | `/logout` | Signed-in; destroys session and disconnects sockets |
+| POST | `/logout` | Staff sign-out; destroys the session and disconnects sockets. Customers use `/customer/logout`. |
 | POST | `/password` | `{currentPassword,password}`; current user |
 | GET | `/bootstrap` | Role-limited business details, active categories/discounts, public VAPID configuration |
 | GET | `/health` | **Outside `/api`**; database connectivity, no secrets |
@@ -28,7 +28,7 @@ Send a stable `X-Operation-ID` UUID on order/menu/staff/settings/payment/refund/
 
 The public storefront uses `GET /public/products` without authentication. Results include public variant IDs and prices, plus active categories. Product images are served through `/public/products/:id/image` only for active, unarchived products in active categories.
 
-Customer authentication uses `GET /customer/session`, `POST /customer/register`, `POST /customer/login`, and `POST /customer/logout`. These accounts never grant staff access. Login/registration rotates the session and returns a new CSRF token.
+Customers sign in through `POST /login` and register through `POST /customer/register`. Customer session/logout compatibility endpoints remain `GET /customer/session`, `POST /customer/login`, and `POST /customer/logout`. These accounts never grant staff access. Login and successful email confirmation rotate the session and return a new CSRF token. `POST /customer/register` with name, contact (optional), email, password and matching confirmPassword sends a 6-digit code and returns `{verificationRequired,token,email,expiresAt,resendAt}` without creating an account or signing in. `POST /customer/register/verify` with `{token,code}` creates the account and session only after successful verification. Codes expire after 10 minutes and allow at most five attempts. `POST /customer/register/resend` with `{token}` sends a replacement after a 60-second cooldown and invalidates the old token/code. All three routes require CSRF; delivery requires the SMTP settings in `.env.example`. SMTP failures do not create accounts.
 
 Customer checkout requires an active customer session and CSRF protection. `POST /customer/quote` accepts `{type,contact,pickupAt?,instructions?,items}`; `type` is `TAKEAWAY` or `PICKUP`, scheduled pickup requires a future ISO timestamp, and each item has `{variantId,quantity,addons?,instructions?}`. Identity is taken from the session. Prices, totals, customer IDs, staff IDs and discounts cannot be supplied by the client. The server returns the current price breakdown and `quoteHash`.
 
@@ -55,7 +55,7 @@ Owner manages menu, staff, settings and archives. Owner/cashier manage permitted
 
 Product body: `{code?,name,categoryId,description?,image?,active,demo?,variants:[{id?,name,price,active}]}`. Existing variant IDs must belong to the product. Removed variants become inactive. Images are returned upload paths; upload first, then save product. Archived identifiers remain reserved.
 
-Category: `{name,active}`. Customer: `{name,contact?,active}`. Add-on: `{code?,name,price,active,variantIds:[]}`. Discount: `{name,kind:"FIXED"|"PERCENT",value,active,startsAt?,endsAt?}`. Staff: `{name,email,role:"OWNER"|"CASHIER"|"KITCHEN",active,password?}`; password required on create. Self-demotion/deactivation and removal of the last active owner are blocked.
+Category: `{name,active}`. Customer: `{name,contact?,active}`. Add-on: `{code?,name,price,active,variantIds:[]}`. Discount: `{name,kind:"FIXED"|"PERCENT",value,active,startsAt?,endsAt?}`. Staff: `{name,email,role:"OWNER"|"CASHIER"|"KITCHEN",active,password?}`; omitting password on create applies the default initial staff/admin password; omitting it on update preserves the current password. Self-demotion/deactivation and removal of the last active owner are blocked.
 
 ## POS, kitchen, payment and approval endpoints
 
@@ -129,3 +129,6 @@ Socket.IO endpoint `/socket.io/`, `transports:['websocket']`, `auth:{csrf}` and 
 - Server: `message:new`, `typing`, `invalidate:{topic,id}`, `session-expired`.
 
 General chat is for active staff. Kitchen order rooms require an already-confirmed order. All connections/packets recheck the stored session and active account; a periodic check disconnects expired sessions. Clients re-fetch authoritative operational data and request `messages?after=<lastId>` after reconnect. Render message text as text, never executable HTML. Push text is generic; notification clicks still require normal session/role authorization.
+
+
+Staff conversation deletion: `POST /chat/rooms/:id/delete` requires a staff chat session, CSRF and a stable `X-Operation-ID`. It removes the conversation and previous message history for the signed-in user only. Other participants retain their copies; orders and stored messages remain intact. New messages restore the room to the list, while history pagination continues to exclude messages cleared by that user. `POST /chat/rooms` explicitly reopens a general/order room for the caller without restoring cleared history. Kitchen access restrictions also apply to deletion.

@@ -11,7 +11,7 @@ export async function setupPwa(ctx) {
     registration.addEventListener('updatefound', () => { const worker = registration.installing; worker?.addEventListener('statechange', () => { if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(); }); });
     offerUpdate();
     registration.update().catch(() => {});
-    navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type === 'PUSH_NOTIFICATION') { window.dispatchEvent(new CustomEvent('workspace-notification', { detail: event.data })); } else if (event.data?.type === 'SYNC_AUTH_REQUIRED') ctx.sessionExpired(); else if (event.data?.type) { window.dispatchEvent(new CustomEvent('draft-sync', { detail: event.data })); ctx.updateSync(); } });
+    navigator.serviceWorker.addEventListener('message', event => { if (event.data?.type === 'OPEN_PUSH_NOTIFICATION') { window.dispatchEvent(new CustomEvent('open-push-notification', { detail: event.data })); } else if (event.data?.type === 'PUSH_NOTIFICATION') { window.dispatchEvent(new CustomEvent('workspace-notification', { detail: event.data })); } else if (event.data?.type === 'SYNC_AUTH_REQUIRED') ctx.sessionExpired(); else if (event.data?.type) { window.dispatchEvent(new CustomEvent('draft-sync', { detail: event.data })); ctx.updateSync(); } });
     let wasControlled = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!wasControlled) { wasControlled = true; return; } if (!ctx.isDirty()) window.location.reload(); else toast('An update is ready. Save your work, then reload.'); });
   } catch { toast('Offline installation is unavailable in this browser. Online features remain available.'); }

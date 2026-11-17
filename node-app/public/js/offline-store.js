@@ -16,6 +16,8 @@ export async function operation(store, mode, action) {
   });
 }
 export const activeUser = () => operation('meta', 'readonly', store => store.get('activeUser')).then(row => row?.value || null);
+export const workspaceLocked = () => operation('meta', 'readonly', store => store.get('workspaceLocked')).then(row => row?.value === true);
+export const setWorkspaceLocked = value => operation('meta', 'readwrite', store => store.put({ key: 'workspaceLocked', value }));
 export async function setActiveUser(user, onlyIfActive = false) {
   const value = user ? { id: user.id, name: user.name, role: user.role, permissions: user.permissions } : null;
   if (!onlyIfActive) return operation('meta', 'readwrite', store => store.put({ key: 'activeUser', value }));
@@ -84,22 +86,23 @@ export async function pauseDraft(userId, id) {
 export async function syncDrafts({ manual = false } = {}) {
   const token = await lease(); if (!token) return { running: true };
   try {
-    const user = await activeUser(); if (!user) return { paused: true };
+    const user = await activeUser(); if (await workspaceLocked() || !user) return { paused: true };
     let session;
     try { const response = await fetch('/api/session', { cache: 'no-store', credentials: 'same-origin' }); if (!response.ok) throw new Error('Session unavailable'); session = (await response.json()).data; } catch { return { offline: true }; }
     if (!session.user || session.user.id !== user.id) { await notify({ type: 'SYNC_AUTH_REQUIRED' }); return { paused: true }; }
     const drafts = await listDrafts(user.id);
     for (const original of drafts) {
-      if ((await activeUser())?.id !== user.id) break;
+      if (await workspaceLocked() || (await activeUser())?.id !== user.id) break;
       if (!['QUEUED', 'SYNCING'].includes(original.status) || (!manual && original.nextAttemptAt > Date.now())) continue;
       const latest = await getDraft(original.id);
       if (!latest || !['QUEUED', 'SYNCING'].includes(latest.status)) continue;
       let draft = { ...latest, status: 'SYNCING' };
       await saveDraft(draft); await notify({ type: 'SYNC_CHANGED', id: draft.id });
       try {
+        if (await workspaceLocked() || (await activeUser())?.id !== user.id) break;
         const response = await fetch('/api/orders', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrf, 'X-Account-ID': user.id, 'X-Operation-ID': draft.operationId }, body: JSON.stringify(draft.payload) });
         const result = await response.json().catch(() => ({ error: { code: 'RESPONSE_LOST', message: 'The server response could not be read. Retry safely with the same operation ID.' } }));
-        if ((await activeUser())?.id !== user.id) break;
+        if (await workspaceLocked() || (await activeUser())?.id !== user.id) break;
         if ([401, 419].includes(response.status)) { await saveDraft({ ...draft, status: 'QUEUED', error: 'Sign in to resume synchronization.' }); await notify({ type: 'SYNC_AUTH_REQUIRED' }); break; }
         if (response.ok && !result.data?.number) throw new Error('The acceptance response was interrupted. Retrying with the same operation ID is safe.');
         if (response.ok && result.data?.number) {
@@ -108,7 +111,7 @@ export async function syncDrafts({ manual = false } = {}) {
         } else if (response.status >= 500 || [408, 429].includes(response.status)) throw new Error(result.error?.message || 'Temporary server failure.');
         else await saveDraft({ ...draft, status: 'NEEDS_REVIEW', error: result.error?.message || 'Review the draft before resubmission.', conflict: result.error?.details || null });
       } catch (error) {
-        if ((await activeUser())?.id !== user.id) break;
+        if (await workspaceLocked() || (await activeUser())?.id !== user.id) break;
         const attempts = (manual ? 0 : draft.attempts || 0) + 1;
         await saveDraft({ ...draft, status: attempts >= 5 ? 'NEEDS_REVIEW' : 'QUEUED', attempts, nextAttemptAt: Date.now() + Math.min(300000, 10000 * 2 ** attempts), error: attempts >= 5 ? 'Retry limit reached. Review this draft and retry manually.' : error.message });
       }

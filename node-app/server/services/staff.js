@@ -4,6 +4,7 @@ import { atomic, audit } from '../lib/atomic.js';
 import { fail } from '../lib/errors.js';
 import { safeUser, authorize } from '../lib/permissions.js';
 import { hashPassword } from '../lib/password.js';
+import { DEFAULT_STAFF_PASSWORD } from '../lib/default-password.js';
 import { pagination, pageResult } from '../lib/time.js';
 const schema = z.object({ name: z.string().trim().min(1).max(120), email: z.email().max(190), role: z.enum(['OWNER', 'CASHIER', 'KITCHEN']), active: z.boolean(), password: z.string().min(12).max(128).optional() }).strict();
 export async function listStaff(query = {}) {
@@ -15,10 +16,11 @@ export async function listStaff(query = {}) {
 export async function saveStaff(actor, key, id, input) {
   authorize(actor, 'staff');
   const data = schema.parse(input);
-  if (!id && !data.password) fail(422, 'PASSWORD', 'A password of at least 12 characters is required.');
-  const passwordHash = data.password ? await hashPassword(data.password) : undefined;
+  const password = data.password || (!id ? DEFAULT_STAFF_PASSWORD : undefined);
+  const passwordHash = password ? await hashPassword(password) : undefined;
   // Password bytes never enter idempotency or audit records; only a one-way request hash is retained.
   return atomic(actor, key, 'staff.save.' + (id || 'new'), data, async (tx, current) => {
+    if (await tx.customerAccount.findUnique({ where: { email: data.email.toLowerCase().trim() }, select: { id: true } })) fail(422, 'EMAIL_REGISTERED', 'This email already belongs to a customer account. Use a different email for staff.');
     const before = id ? await tx.user.findUnique({ where: { id } }) : null;
     if (id && (!before || before.archivedAt)) fail(404, 'NOT_FOUND', 'Account not found.');
     if (id === actor.id && (!data.active || data.role !== 'OWNER')) fail(422, 'SELF_ACCOUNT', 'You cannot deactivate or demote your own account.');

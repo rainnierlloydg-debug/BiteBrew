@@ -1,5 +1,15 @@
 # Completed source, evidence and remaining acceptance
 
+## Shared sign-in and administrator-managed staff
+
+The 41-test suite passes with the shared `/api/login` endpoint for customers, owners, cashiers and kitchen staff. Integration checks cover automatic destinations, role isolation, session rotation between account types, disabled accounts, rejected role injection, duplicate-email protection, blocked public staff signup and owner-only staff creation. Browser checks cover the single `/login.html` form, customer checkout after registration, administrator-created staff signing straight into the kitchen, sign-out confirmation, and retaining drafts when account switching is canceled. Legacy staff and customer workspace URLs redirect anonymous users to the shared sign-in page.
+
+## Push notification pipeline verification (17 November 2026)
+
+The current suite passes 41 automated tests. Push-specific tests use the real isolated MySQL database for subscription ownership, outbox acceptance, retries, expired endpoints, role restrictions, interrupted final attempts and VAPID key-pair validation. The transport is injected in these tests; they do not contact a real browser push provider. Service-worker tests verify payload display and safe routing to the staff workspace without redirecting a customer tab.
+
+Headless browser fixtures also pass Enable, Test, blocked permission, key renewal, server-registration recovery after local cache loss, and per-device Unsubscribe. Browser permission and subscription APIs are simulated in that fixture. To verify actual device delivery, enable push on the live Notifications page, grant browser permission, and choose Send test notification. A server acceptance response and an actual device notification are separate observations; the latter still requires a permitted browser/device and an available push provider.
+
 Updated on 8 November 2026. All 29 automated tests now pass, including real MySQL/API and authenticated WebSocket integration using a separate test database. Owner/cashier/kitchen authorization is enforced in API middleware and sensitive service operations. Business records were not used for test fixtures. Live push, restore drills and deployment-specific acceptance are still required.
 
 ## React migration verification (11 November 2026)
@@ -75,3 +85,8 @@ Configure the dedicated MySQL `TEST_DATABASE_URL` before accepting integration r
 - Tax/charge configuration is operational only; official tax-invoice compliance requires separate business configuration and validation.
 
 The previous screenshot-driven removal requests were superseded by the latest complete specification, which explicitly includes Staff Management, Audit Logs, Customers, Recent Orders and Outstanding Balances. Optional inventory, expenses and cashier shifts are excluded from the new runtime.
+
+
+Account confirmation checks: all 42 automated tests passed, including isolated MySQL checks for no account before confirmation, code expiry, five-attempt lockout, resend cooldown and token replacement, one-time verification, delivery failure cleanup and shared-login access after verification. Email transport is injected in tests; actual email delivery remains pending SMTP sender configuration. Browser fixtures verify Create Account and shared login at 1366x768, 1280x720, 1024x600, 390x844, 360x640, 320x568 and 844x390 with no page scrolling or clipped inputs/actions. The code confirmation screen is checked at desktop, small mobile and landscape sizes. These are viewport layout checks with the on-screen keyboard closed.
+
+Browser history protection: landing ends the current staff session and locks the cached workspace until explicit sign-in. The browser harness exercises real CDP history Back/Forward entries, refresh, direct staff URLs, offline navigation, a restored-page event, paused synchronization and preserved drafts after re-login. Private content is hidden while restoring and checking a session.

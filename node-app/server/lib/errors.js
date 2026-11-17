@@ -11,5 +11,5 @@ export function errorHandler(error, req, res, next) {
   if (error.type === 'entity.too.large') return res.status(413).json({ error: { code: 'REQUEST_TOO_LARGE', message: 'The submitted request is too large.' } });
   const status = error.status || 500;
   if (status >= 500) console.error('Request failed:', req.method, req.path, error.code || error.name);
-  res.status(status).json({ error: { code: error.code || 'SERVER_ERROR', message: status >= 500 ? 'The operation could not be completed. Retry using the same operation ID.' : error.message, ...(error.details !== undefined ? { details: error.details } : {}) } });
+  res.status(status).json({ error: { code: error.code || 'SERVER_ERROR', message: status >= 500 && error.code !== 'EMAIL_UNAVAILABLE' ? 'The operation could not be completed. Retry using the same operation ID.' : error.message, ...(error.details !== undefined ? { details: error.details } : {}) } });
 }
