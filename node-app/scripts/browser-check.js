@@ -480,7 +480,7 @@ try {
   await evaluate('document.querySelector("[data-message-ok]").click()');
   await waitFor('document.querySelector("[data-open-general]")');
   assert.equal(staffChatDeletes,1,'Delete is submitted once');await acknowledge();
-  await send('Page.reload');await waitFor('document.querySelector("[data-open-general]")');
+  await evaluate('window.fixtureReloadPending=true');await send('Page.reload');await waitFor('!window.fixtureReloadPending&&document.querySelector("[data-open-general]")');
   assert.equal(await evaluate('!!document.querySelector("[data-delete-conversation]")'),false,'Deleted conversation stays removed after reload');
   await evaluate('document.querySelector("[data-open-general]").click()');
   await waitFor('document.querySelector("[data-delete-conversation]")');
@@ -541,8 +541,41 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   staffSignedIn=false;customerSignedIn=true;
   await send('Page.navigate', { url: base + '/customer.html' });
-  await waitFor(`document.querySelector('.login-card h2')?.textContent.includes('Welcome')`);
-  await evaluate(`[...document.querySelectorAll('button')].find(button => button.textContent === 'Chat with staff').click()`);
+  await waitFor(`document.querySelector('.customer-portal h1')?.textContent.includes('Welcome')`);
+  for(const [width,height] of [[1440,1000],[1280,720],[390,844],[320,568]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<761});await pause(50);
+    assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth+1&&!!document.querySelector(".customer-profile-card")&&!document.querySelector(".login-layout,.customer-access-footer")'),true,'Customer account fits '+width+' and uses its own layout');
+    if(width===1440)await screenshot('customer-account-desktop');
+    if(width===390)await screenshot('customer-account-mobile');
+  }
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  assert.equal(await evaluate('document.querySelectorAll(".customer-portal-header nav a").length'),0,'Account header has no Menu/Home links');
+  await evaluate('document.querySelector(".customer-menu-card a").click()');
+  await waitFor('document.querySelector("[data-catalog-logout]")&&document.querySelector("#product-results .menu-card")');
+  assert.equal(await evaluate('!document.querySelector(".site-header nav,.site-footer nav")&&![...document.querySelectorAll("a")].some(a=>new URL(a.href).pathname==="/login.html")'),true,'Signed-in customer menu has no Home/My account links or Sign in');
+  await evaluate('window.fixtureReloadPending=true');await send('Page.reload');await waitFor('!window.fixtureReloadPending&&document.querySelector("[data-catalog-logout]")');
+  await evaluate('document.querySelector("[data-catalog-logout]").click()');
+  await waitFor('document.querySelector(".message-box-confirm[open]")');
+  await evaluate('document.querySelector("[data-message-cancel]").click()');
+  assert.equal(customerLogoutCount,0,'Cancel keeps the customer signed in on the product page');
+  await evaluate('document.querySelector("[data-menu-home]").click()');
+  await waitFor('document.querySelector("[data-customer-chat-nav]")');
+  await evaluate('document.querySelector("[data-customer-chat-nav]").click()');
+  await waitFor('document.querySelector(".customer-support .chat-compose")&&location.search.includes("view=chat")');
+  assert.equal(await evaluate('document.querySelector("[data-back]").textContent.includes("Back to my account")'),true,'Chat returns to the customer account');
+  await evaluate('window.fixtureReloadPending=true');await send('Page.reload');
+  await waitFor('!window.fixtureReloadPending&&document.querySelector(".customer-support .chat-compose")');
+  await evaluate('document.querySelector("[data-back]").click()');
+  await waitFor('document.querySelector(".customer-menu-card a")');
+  await evaluate('document.querySelector(".customer-menu-card a").click()');
+  await waitFor('document.querySelector("[data-menu-home]")&&document.querySelector("[data-catalog-logout]")');
+  assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),true,'Home button fits the mobile menu header');
+  await send('Page.navigate',{url:base+'/customer.html'});await waitFor('document.querySelector("[data-customer-chat]")');
+  assert.equal(await evaluate('!!document.querySelector("[data-customer-chat-nav]")'),true,'Account header has a direct Chat shortcut');
+  results.push('Product Home button opens the customer account, Chat stays one click away and its view survives reload');
+
+  results.push('Customer headers remove extra navigation; Browse Menu and reload retain the customer session and show confirmed Sign out instead of Sign in');
+  await evaluate(`document.querySelector('[data-customer-chat]').click()`);
   await waitFor(`document.querySelector('.customer-support .chat-compose')`);
   await evaluate(`const form = document.querySelector('.customer-support form'); form.elements.text.value = 'DEMONSTRATION customer asks about pickup'; form.requestSubmit()`);
   await waitFor(`document.querySelector('.customer-support .chat-message')?.textContent.includes('asks about pickup')`);
@@ -557,8 +590,8 @@ try {
   await screenshot('staff-customer-inbox');
   staffSignedIn=false;customerSignedIn=true;
   await send('Page.navigate', { url: base + '/customer.html' });
-  await waitFor(`document.querySelector('.login-card h2')?.textContent.includes('Welcome')`);
-  await evaluate(`[...document.querySelectorAll('button')].find(button => button.textContent === 'Chat with staff').click()`);
+  await waitFor(`document.querySelector('.customer-portal h1')?.textContent.includes('Welcome')`);
+  await evaluate(`document.querySelector('[data-customer-chat]').click()`);
   await waitFor(`document.querySelector('.customer-support .chat-messages')?.textContent.includes('confirms pickup')`);
   assert.equal(supportMessages.length, 2);
   results.push('Customer chat fits mobile, sends messages, staff inbox replies and customer sees saved reply');

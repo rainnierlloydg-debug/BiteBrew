@@ -1,5 +1,7 @@
 ﻿import { Icon } from './Icon.jsx';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { api, setAccount } from '/js/api.js';
+import { confirmMessage, showMessage } from '/shared/message-box.js';
 import { initStorefront } from '/js/storefront.js';
 import { ProductCatalog } from './ProductCatalog.jsx';
 
@@ -9,6 +11,36 @@ const features = [
   { icon: 'wallet', title: 'Clear payments', text: 'Track cash and GCash payments, outstanding balances and daily sales.' },
   { icon: 'users', title: 'A workspace for your team', text: 'Owners, cashiers and kitchen staff have access suited to their roles.' }
 ];
+
+function CatalogAccess() {
+  const [session, setSession] = useState(null), [loading, setLoading] = useState(true), [failed, setFailed] = useState(false), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true); setFailed(false);
+      try { const value = (await api('/session', { authEvent: false })).data; if (active) { setSession(value); if (value.customer) setAccount(value.customer.id); } }
+      catch { if (active) setFailed(true); }
+      finally { if (active) setLoading(false); }
+    }
+    load();
+    const restored = event => { if (event.persisted) load(); };
+    window.addEventListener('pageshow', restored);
+    return () => { active = false; window.removeEventListener('pageshow', restored); };
+  }, [retry]);
+  async function logout() {
+    if (busy) return; setBusy(true);
+    try {
+      if (!(await confirmMessage('Are you sure you want to sign out?', { title: 'Sign out?', confirmLabel: 'Sign out', cancelLabel: 'Cancel' }))) return;
+      await api('/customer/logout', { method: 'POST', data: {}, authEvent: false });
+      setAccount(null); location.replace('/login.html');
+    } catch (error) { showMessage(error.message, 'error'); } finally { setBusy(false); }
+  }
+  if (loading) return <span className="catalog-session-status" role="status">Checking account...</span>;
+  if (failed) return <button type="button" className="button small" onClick={() => setRetry(retry + 1)}>Retry account check</button>;
+  if (session?.customer) return <><a className="button button-outline small catalog-home" data-menu-home="" href="/customer.html"><Icon name="left" size={16} /> Home</a><button type="button" className="button small" data-catalog-logout="" disabled={busy} onClick={logout}>Sign out</button></>;
+  if (session?.user) return <a className="button small" href={'/staff.html?page=' + (session.user.role === 'KITCHEN' ? 'kitchen' : session.user.role === 'CASHIER' ? 'pos' : 'dashboard')}>Open workspace</a>;
+  return <a className="button small" href="/login.html">Sign in</a>;
+}
 
 export function LandingPage({ catalog = false }) {
   useEffect(() => {
@@ -24,10 +56,10 @@ export function LandingPage({ catalog = false }) {
         <img src="/icons/brand-logo.png" width="64" height="50" alt="" />
         <span>Bite <i>&amp;</i> Brew<small>A BITE. A SIP. A GOOD DAY.</small></span>
       </a>
-      <nav aria-label="Main navigation">{catalog ? <><a href="/">Home</a><a href="/customer.html">My account</a></> : <><a href="#information">Information</a><a href="#how-it-works">How it works</a><a href="#about">About</a></>}</nav>
+      {!catalog && <nav aria-label="Main navigation"><a href="#information">Information</a><a href="#how-it-works">How it works</a><a href="#about">About</a></nav>}
       <div className="header-logins">
         {catalog && <button type="button" className="cart-button" data-cart aria-label="Open cart, 0 items" title="View cart"><Icon name="cart" size={21} /><span className="cart-count" data-cart-count aria-hidden="true">0</span></button>}
-        <a className="button small" href="/login.html">Sign in</a>
+        {catalog ? <CatalogAccess /> : <a className="button small" href="/login.html">Sign in</a>}
       </div>
     </header></div>
     <main id="main">{catalog ? <ProductCatalog /> : <>
@@ -62,6 +94,6 @@ export function LandingPage({ catalog = false }) {
         </div>
       </section>
     </>}</main>
-    <footer className="site-footer"><div className="wrap footer-inner"><div><a className="footer-brand" href="/">Bite <i>&amp;</i> Brew</a><p>Your favorites, all in one place.</p></div><nav aria-label="Footer navigation"><a href={catalog ? "/" : "#information"}>{catalog ? "Home" : "Information"}</a><a href="/login.html">Sign in</a></nav><a className="back-to-top" href="#main">Back to top <Icon name="up" size={12} /></a></div></footer>
+    <footer className="site-footer"><div className="wrap footer-inner"><div><a className="footer-brand" href="/">Bite <i>&amp;</i> Brew</a><p>Your favorites, all in one place.</p></div>{!catalog && <nav aria-label="Footer navigation"><a href="#information">Information</a><a href="/login.html">Sign in</a></nav>}<a className="back-to-top" href="#main">Back to top <Icon name="up" size={12} /></a></div></footer>
   </div>;
 }

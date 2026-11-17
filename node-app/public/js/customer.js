@@ -1,5 +1,5 @@
 // Versioned entry avoids the former separate login bundle in an older offline cache.
-import { mountCustomer } from '/assets/react-runtime.js?shared-login=3';
+import { mountCustomer } from '/assets/react-runtime.js?shared-login=4';
 mountCustomer();
 
 if ('serviceWorker' in navigator && window.isSecureContext) {

@@ -22,7 +22,7 @@ const app = document.querySelector('#app');
 const navigation = [
   ['dashboard', 'Dashboard', 'dashboard', 'dashboard', 'WORKSPACE'], ['pos', 'New Order / POS', 'pizza', 'pos', 'WORKSPACE'], ['drafts', 'Offline Drafts', 'archive', 'pos', 'WORKSPACE'], ['orders', 'Orders', 'orders', 'orders', 'WORKSPACE'], ['kitchen', 'Kitchen Display', 'kitchen', 'kitchen', 'WORKSPACE'],
   ['menu', 'Menu', 'pizza', 'menu', 'BUSINESS'], ['customers', 'Customers', 'users', 'customers', 'BUSINESS'], ['payments', 'Payments & Refunds', 'wallet', 'payments', 'BUSINESS'], ['reports', 'Sales Reports', 'chart', 'reports', 'BUSINESS'],
-  ['chat', 'Staff Chat', 'chat', 'chat', 'TEAM'], ['notifications', 'Notifications', 'bell', 'notifications', 'TEAM'],
+  ['chat', 'Chat', 'chat', 'chat', 'TEAM'], ['notifications', 'Notifications', 'bell', 'notifications', 'TEAM'],
   ['archives', 'Archived Records', 'archive', 'archives', 'ADMINISTRATION'], ['staff', 'Staff Management', 'users', 'staff', 'ADMINISTRATION'], ['audit', 'Audit Logs', 'orders', 'audit', 'ADMINISTRATION'], ['settings', 'Settings', 'settings', 'settings', 'ADMINISTRATION'],
 ];
 const state = { user: null, bootstrap: null, sessionConfirmed: false, online: navigator.onLine, live: false, dirty: false };
