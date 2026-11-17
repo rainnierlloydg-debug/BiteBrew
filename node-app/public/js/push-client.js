@@ -21,18 +21,31 @@ export async function browserPushState(publicKey) {
   return { supported: true, enabled: Notification.permission === 'granted' && Boolean(subscription && record) && keyMatches(subscription, publicKey), record, subscription, permission: Notification.permission };
 }
 
+async function readyRegistration() {
+  await navigator.serviceWorker.register('/sw.js', { type: 'module', updateViaCache: 'none' });
+  let timer;
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('The offline worker is not ready. Reload the app, then try again.')), 15000); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+export async function testBrowserNotification() {
+  if (!pushSupported()) throw new Error('Browser notifications need HTTPS or localhost and a supported browser.');
+  if (Notification.permission === 'denied') throw new Error("Notifications are blocked for this address. Allow notifications in this site's browser permissions.");
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (permission !== 'granted') throw new Error('Notification permission was not granted for ' + location.origin + '.');
+  const registration = await readyRegistration();
+  await registration.showNotification('Bite & Brew', { body: 'Browser notification test. Your device accepted this notification.', icon: '/icons/icon-192.png', tag: 'bite-brew-browser-test-' + crypto.randomUUID(), requireInteraction: true, data: { url: '/staff.html?page=notifications' } });
+}
+
 export async function enableBrowserPush(userId, publicKey, preferences) {
   if (!pushSupported()) throw new Error('Push needs a supported browser on HTTPS or http://127.0.0.1. On iPhone/iPad, open the installed Home Screen app.');
   if (!publicKey) throw new Error('Push is not configured on the server.');
   if (Notification.permission === 'denied') throw new Error('Notifications are blocked. Open this site’s browser permissions, allow notifications, then try again.');
   const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Notification permission was not granted. Allow notifications to enable push; in-app updates remain available.');
-  await navigator.serviceWorker.register('/sw.js', { type: 'module', updateViaCache: 'none' });
-  let timer;
-  const registration = await Promise.race([
-    navigator.serviceWorker.ready,
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('The offline worker is not ready. Reload the app, then enable push again.')), 15000); }),
-  ]).finally(() => clearTimeout(timer));
+  const registration = await readyRegistration();
   let subscription = await registration.pushManager.getSubscription();
   if (subscription && !keyMatches(subscription, publicKey)) {
     if (!(await subscription.unsubscribe())) throw new Error('The previous push subscription could not be replaced. Try again.');

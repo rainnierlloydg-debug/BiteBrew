@@ -1,7 +1,7 @@
 import { BRAND, brandText } from './shared/brand.js';
 import { activeUser, syncDrafts } from './js/offline-store.js';
 import { pushTarget } from './shared/push-target.js';
-const VERSION = 'bite-brew-shell-efb3601793b4ee4e';
+const VERSION = 'bite-brew-shell-4b55365a7f20f8f3';
 const ASSETS = ['/js/customer.js?customer-nav=1', '/js/menu.js?customer-nav=1', '/js/workspace-session.js', '/menu.html', '/js/menu.js', '/js/customer.js?shared-login=4', '/assets/react-runtime.js?shared-login=4', '/login.html', '/js/access-session.js', '/js/audit-view.js', '/shared/push-target.js', '/js/push-client.js', '/shared/message-box.js', '/css/message-box.css', '/shared/fontawesome-icons.js', '/shared/fontawesome.LICENSE.txt', '/assets/react-runtime.js', '/customer.html', '/js/customer.js', '/js/support-chat.js', '/images/hero-pizza-burger.png', '/images/hero-food.png', '/js/storefront.js', '/staff.html', '/css/landing.css', '/js/landing.js', '/images/burger.webp', '/images/milk-tea.webp', '/images/fries.webp', '/', '/index.html', '/offline.html', '/manifest.webmanifest', '/css/app.css', '/css/print.css', '/js/app.js', '/js/api.js', '/js/ui.js', '/js/offline-store.js', '/js/pwa.js', '/js/realtime.js', '/js/pages/dashboard.js', '/js/pages/pos.js', '/js/pages/orders.js', '/js/pages/management.js', '/js/pages/payments.js', '/js/pages/reports.js', '/js/pages/chat.js', '/js/pages/settings.js', '/js/pages/notifications.js', '/js/document.js', '/shared/calculation.js', '/shared/brand.js', '/icons/brand-logo.png', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(ASSETS.map(url => new Request(url, { cache: 'reload' }))))));
 self.addEventListener('activate', event => event.waitUntil((async () => { for (const name of await caches.keys()) if ((name.startsWith('bite-brew-shell-') || name.startsWith('ellas-shell-')) && name !== VERSION) await caches.delete(name); await self.clients.claim(); })()));
@@ -29,7 +29,7 @@ self.addEventListener('push', event => event.waitUntil((async () => {
   const url = pushTarget(value?.url, self.location.origin);
   const title = typeof value?.title === 'string' ? brandText(value.title).slice(0, 120) : BRAND.name;
   const body = typeof value?.body === 'string' ? brandText(value.body).slice(0, 255) : 'There is a new update in your workspace.';
-  await self.registration.showNotification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: value?.tag || 'bite-brew-update', data: { url } });
+  await self.registration.showNotification(title, { body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: typeof value?.tag === 'string' && value.tag ? value.tag : 'bite-brew-test-' + crypto.randomUUID(), data: { url } });
   for (const client of await self.clients.matchAll({ type: 'window' })) if (client.visibilityState === 'visible' && new URL(client.url).pathname === '/staff.html') client.postMessage({ type: 'PUSH_NOTIFICATION', id: value?.tag, title, body });
 })()));
 self.addEventListener('notificationclick', event => {

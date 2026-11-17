@@ -26,12 +26,18 @@ test('service worker displays the payload and focuses the staff tab without redi
   const customer = { url: origin + '/customer.html', visibilityState: 'visible', postMessage: () => assert.fail('Staff push must not be exposed to the customer screen') };
   const self = { location: { origin }, addEventListener: (type, handler) => { listeners[type] = handler; }, clients: { matchAll: async () => [customer, staff], openWindow: async url => opened.push(url) }, registration: { showNotification: async (title, options) => shown.push({ title, options }) } };
   const source = fs.readFileSync('public/sw.js', 'utf8').replace(/^import .+\r?\n/gm, '');
-  vm.runInNewContext(source, { self, URL, BRAND, brandText, pushTarget });
+  vm.runInNewContext(source, { self, URL, BRAND, brandText, pushTarget, crypto: { randomUUID } });
   const order = randomUUID(), payload = { title: BRAND.name, body: 'Test notification: push is working on this browser.', tag: 'fixture-push', url: '/?page=orders&order=' + order };
   listeners.push({ data: { json: () => payload }, waitUntil: value => { pending = value; } }); await pending;
   assert.equal(shown[0].title, BRAND.name); assert.equal(shown[0].options.body, payload.body);
   assert.equal(shown[0].options.data.url, '/staff.html?page=orders&order=' + order);
   assert.equal(messages[0].type, 'PUSH_NOTIFICATION'); assert.equal(messages[0].body, payload.body);
+  listeners.push({ waitUntil: value => { pending = value; } }); await pending;
+  listeners.push({ data: { json: () => { throw new SyntaxError('DevTools plain text'); } }, waitUntil: value => { pending = value; } }); await pending;
+  assert.equal(shown[1].title, BRAND.name); assert.equal(shown[2].title, BRAND.name);
+  assert.notEqual(shown[1].options.tag, shown[2].options.tag, 'Repeated DevTools pushes can alert independently');
+  assert.equal(shown[1].options.data.url, '/staff.html?page=notifications');
+
   listeners.notificationclick({ notification: { data: shown[0].options.data, close: () => { closed = true; } }, waitUntil: value => { pending = value; } }); await pending;
   assert.equal(closed, true); assert.equal(focused, true); assert.equal(opened.length, 0);
   assert.equal(messages.at(-1).type, 'OPEN_PUSH_NOTIFICATION');

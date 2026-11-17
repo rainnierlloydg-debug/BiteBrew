@@ -342,6 +342,16 @@ try {
   pushFixtureEnabled = true;
   await navigate('notifications');
   await evaluate('(()=>{window.fixturePermission="default";window.fixturePushCalls=0;window.fixtureUnsubscribed=0;window.fixtureSubscription=null;Object.defineProperty(Notification,"permission",{configurable:true,get:()=>window.fixturePermission});Notification.requestPermission=async()=>{window.fixturePermission="granted";return "granted";};PushManager.prototype.getSubscription=async()=>window.fixtureSubscription;PushManager.prototype.subscribe=async options=>{window.fixturePushCalls++;const current={endpoint:"https://fcm.googleapis.com/fcm/send/fixture-browser-"+window.fixturePushCalls,options,unsubscribe:async()=>{window.fixtureUnsubscribed++;window.fixtureSubscription=null;return true;},toJSON:()=>({endpoint:current.endpoint,expirationTime:null,keys:{p256dh:"fixture-public-key-12345678901234567890",auth:"fixture-auth-key-123456"}})};window.fixtureSubscription=current;return current;};})()');
+  await evaluate('(()=>{window.fixtureDisplays=[];window.originalShowNotification=ServiceWorkerRegistration.prototype.showNotification;ServiceWorkerRegistration.prototype.showNotification=async function(title,options){window.fixtureDisplays.push({title,options});};})()');
+  await evaluate('document.querySelector("[data-test-browser]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("browser accepted")');
+  assert.equal(await evaluate('window.fixtureDisplays.length'),1,'Local notification test works before a push subscription exists');
+  assert.equal(await evaluate('window.fixturePushCalls'),0,'Local test does not subscribe or contact a push provider');
+  await acknowledge();
+  await evaluate('document.querySelector("[data-test-browser]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("browser accepted")');
+  assert.equal(await evaluate('window.fixtureDisplays[0].options.tag!==window.fixtureDisplays[1].options.tag'),true,'Repeated local tests have distinct notification tags');
+  await acknowledge();
   await evaluate('document.querySelector("#push-preferences").requestSubmit()');
   await waitFor('document.querySelector("[data-push-status]")?.textContent.includes("Push is enabled")');
   await acknowledge();
@@ -352,6 +362,10 @@ try {
   await evaluate('document.querySelector("[data-test-push]").click()');
   await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("push service accepted")');
   assert.equal(pushFixtureTests,1,'The Test button uses the server delivery endpoint');
+  await acknowledge();
+  await evaluate('window.fixturePermission="denied";document.querySelector("[data-test-browser]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("blocked")');
+  assert.equal(await evaluate('window.fixtureDisplays.length'),2,'Denied permission is reported without claiming local display succeeded');
   await acknowledge();
   await evaluate('window.fixturePermission="denied";document.querySelector("#push-preferences").requestSubmit()');
   await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("blocked")');
@@ -367,6 +381,7 @@ try {
   await acknowledge();
   assert.ok(pushFixtureRecords.some(row=>row.id===otherDevice.id),'Unsubscribe preserves other devices');
   assert.equal(await evaluate('window.fixtureSubscription'),null);
+  await evaluate('ServiceWorkerRegistration.prototype.showNotification=window.originalShowNotification;true');
   pushFixtureEnabled=false; pushFixtureRecords=[];
   results.push('Push UI enables, reconciles server registration without local cache, tests delivery, handles denied permission, renews changed keys and unsubscribes only this device');
   await navigate('audit');
