@@ -54,6 +54,7 @@ The application uses **React, Node.js, Express, MySQL, and Prisma**. The fronten
 | --- | --- |
 | Frontend | React 19, React DOM, HTML, and CSS |
 | Frontend build | esbuild; React is bundled locally without a CDN |
+| Interface icons | Locally hosted subset of Font Awesome Free 6.7.2 (Solid) |
 | Backend | Node.js and Express 5 |
 | Database | MySQL 8 and Prisma 6 |
 | Staff real-time communication | Socket.IO using WebSocket transport |
@@ -386,3 +387,5 @@ Legacy import is optional and requires separately preserved source configuration
 ## License
 
 A project license has not been specified in this repository.
+
+Interface icons use Font Awesome Free 6.7.2 by Fonticons, Inc., under CC BY 4.0. The local subset retains attribution; see [Font Awesome license](node-app/public/shared/fontawesome.LICENSE.txt).

@@ -1,11 +1,11 @@
 import { renderMarkup } from '/assets/react-runtime.js';
 import { api, setAccount } from './api.js';
-import { e, money, picture } from './ui.js';
+import { e, money, picture, icon } from './ui.js';
 import { cents, decimal } from '../shared/calculation.js';
 
 const CART = 'bite-brew-public-cart-v1', PENDING = 'bite-brew-checkout-v1';
 export function productPicture(product) {
-  return picture(product);
+  return picture(product, { fit: 'contain' });
 }
 const uuid = value => typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value);
 const lineKey = line => line.variantId + ':' + (line.addons || []).map(addon => typeof addon === 'string' ? addon : addon.id).sort().join(',');
@@ -47,7 +47,7 @@ function updateCartCount() {
 function dialog(title, body) {
   const node = document.createElement('dialog'); node.className = 'shop-dialog';
   node.setAttribute('aria-labelledby', 'shop-dialog-title');
-  renderMarkup(node, `<div class="shop-dialog-heading"><h2 id="shop-dialog-title">${e(title)}</h2><button class="shop-close" type="button" aria-label="Close dialog">&#215;</button></div><div class="shop-dialog-body">${body}</div>`);
+  renderMarkup(node, `<div class="shop-dialog-heading"><h2 id="shop-dialog-title">${e(title)}</h2><button class="shop-close" type="button" aria-label="Close dialog">${icon('close', 16)}</button></div><div class="shop-dialog-body">${body}</div>`);
   const previous = document.activeElement;
   node.querySelector('.shop-close').onclick = () => node.close();
   node.addEventListener('close', () => { node.remove(); if (previous?.isConnected) previous.focus(); });
@@ -62,17 +62,20 @@ export function productDetails(product) {
   const optionControl = product.variants.length === 1
     ? `<input type="hidden" name="variant" value="0"><input aria-label="Selected option" value="${e(optionLabel(product.variants[0]))}" readonly>`
     : `<select name="variant" required>${product.variants.map((variant, index) => `<option value="${index}">${e(optionLabel(variant))}</option>`).join('')}</select>`;
-  const node = dialog(product.name, `${productPicture(product)}<p>${e(product.description || '')}</p>${product.demo ? '<p class="shop-note">Demonstration product: sample price and artwork.</p>' : ''}<form class="shop-form"> <label>Option${optionControl}</label><label>Quantity<input name="quantity" type="number" min="1" max="100" value="1" required></label><p data-shop-error role="alert">${product.variants.length && !usable ? 'This product cannot be added right now. Refresh the page and try again.' : ''}</p><button class="button" ${usable ? '' : 'disabled'}>${product.variants.length ? 'Add to cart' : 'Currently unavailable'}</button></form>`);
+  const node = dialog(product.name, `<div class="product-overview">${productPicture(product)}<div class="product-overview-copy">${product.category?.name ? `<span class="product-category">${e(product.category.name)}</span>` : ''}${product.description ? `<p>${e(product.description)}</p>` : ''}${product.demo ? '<p class="product-demo-note">Demonstration product: sample price and artwork.</p>' : ''}</div></div><form class="shop-form"><div class="product-options-heading"><h3>Make it yours</h3><p>Choose your option and quantity.</p></div><label>Choose an option${optionControl}</label><label>Quantity<div class="product-quantity"><button type="button" data-product-minus aria-label="Decrease quantity">${icon('minus', 14)}</button><input aria-label="Quantity" name="quantity" type="number" min="1" max="100" value="1" required><button type="button" data-product-plus aria-label="Increase quantity">${icon('plus', 14)}</button></div></label><p data-shop-error role="alert">${product.variants.length && !usable ? 'This product cannot be added right now. Refresh the page and try again.' : ''}</p><div class="product-purchase"><div class="product-estimate"><span>Estimated total</span><strong data-product-total></strong></div><button type="submit" class="button" ${usable ? '' : 'disabled'}>${icon('cart', 18)}${product.variants.length ? 'Add to cart' : 'Currently unavailable'}</button></div></form>`);
+  node.classList.add('shop-product');
   const form = node.querySelector('form');
   const addonPicker = document.createElement('fieldset'); addonPicker.className = 'shop-addon-picker';
   form.querySelector('[name="quantity"]').closest('label').before(addonPicker);
-  const estimate = document.createElement('p'); estimate.className = 'shop-note';
-  form.querySelector('[data-shop-error]').before(estimate);
+  const estimate = form.querySelector('[data-product-total]');
   function updateEstimate() {
     const variant = product.variants[Number(form.elements.variant.value)];
     const selected = [...addonPicker.querySelectorAll('input:checked')].map(input => variant?.addons?.find(addon => addon.id === input.value)).filter(Boolean);
     const unit = variant ? cents(variant.price) + selected.reduce((sum, addon) => sum + cents(addon.price), 0) : 0;
-    estimate.textContent = 'Estimated total: ' + money(decimal(unit * Math.max(1, Number(form.elements.quantity.value) || 1)));
+    const quantity = Math.min(100, Math.max(1, Number(form.elements.quantity.value) || 1));
+    estimate.textContent = money(decimal(unit * quantity));
+    form.querySelector('[data-product-minus]').disabled = quantity <= 1;
+    form.querySelector('[data-product-plus]').disabled = quantity >= 100;
   }
   function showAddons() {
     const addons = product.variants[Number(form.elements.variant.value)]?.addons || [];
@@ -82,6 +85,12 @@ export function productDetails(product) {
   }
   form.elements.variant.onchange = showAddons;
   form.elements.quantity.oninput = updateEstimate;
+  for (const [selector, delta] of [['[data-product-minus]', -1], ['[data-product-plus]', 1]]) {
+    form.querySelector(selector).onclick = () => {
+      form.elements.quantity.value = Math.min(100, Math.max(1, (Number(form.elements.quantity.value) || 1) + delta));
+      updateEstimate();
+    };
+  }
   showAddons();
   form.onsubmit = event => {
     event.preventDefault();
@@ -96,12 +105,32 @@ export function productDetails(product) {
 }
 export function showCart(message = '') {
   const lines = readCart();
-  const node = dialog('Your cart', `<p class="shop-note">${e(message)}</p>${lines.length ? `<ul class="shop-lines">${lines.map((line, index) => `<li><div><strong>${e(line.name)}</strong><small>${e(line.variantName)} &middot; ${money(line.price)} each</small>${addonSummary(line)}<label>Quantity <input aria-label="Quantity for ${e(line.name)} ${e(line.variantName)}" type="number" min="1" max="100" value="${line.quantity}" data-quantity="${index}"></label></div><div><b>${money(decimal(cents(line.price) * line.quantity))}</b><button class="shop-link" data-remove="${index}" type="button">Remove</button></div></li>`).join('')}</ul><p class="shop-total">Estimated subtotal <strong>${money(decimal(lines.reduce((sum, line) => sum + cents(line.price) * line.quantity, 0)))}</strong></p><p class="shop-note">Current prices and charges are confirmed at checkout. Payment is handled by the store after the order is placed.</p><p data-shop-error role="alert"></p><button class="button" data-checkout type="button">Proceed to checkout</button>` : '<p>Your cart is empty. Browse products to add something.</p>'}`);
+  const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
+  const removeIcon = icon('trash', 16);
+  const node = dialog('Your cart', `${message ? `<p class="cart-status" role="status">${e(message)}</p>` : ''}${lines.length ? `<p class="cart-item-count" aria-live="polite">${itemCount} ${itemCount === 1 ? 'item' : 'items'} in your cart</p><ul class="shop-lines cart-items">${lines.map((line, index) => `<li class="cart-item"><div class="cart-item-heading"><div class="cart-item-info"><strong>${e(line.name)}</strong><small>${e(line.variantName === 'Menu price (size unspecified)' ? 'Menu price' : line.variantName)} &middot; ${money(line.price)} each</small>${addonSummary(line)}</div><b class="cart-item-price">${money(decimal(cents(line.price) * line.quantity))}</b></div><div class="cart-item-controls"><div class="cart-quantity"><label for="cart-quantity-${index}">Quantity</label><div class="cart-quantity-control"><button type="button" data-decrease="${index}" aria-label="Decrease quantity for ${e(line.name)}" ${line.quantity <= 1 ? 'disabled' : ''}>${icon('minus', 12)}</button><input id="cart-quantity-${index}" aria-label="Quantity for ${e(line.name)} ${e(line.variantName)}" type="number" min="1" max="100" value="${line.quantity}" data-quantity="${index}"><button type="button" data-increase="${index}" aria-label="Increase quantity for ${e(line.name)}" ${line.quantity >= 100 ? 'disabled' : ''}>${icon('plus', 12)}</button></div></div><button class="cart-remove" data-remove="${index}" type="button" aria-label="Remove ${e(line.name)} from cart">${removeIcon}<span>Remove</span></button></div></li>`).join('')}</ul><section class="cart-summary" aria-label="Order summary"><p class="shop-total"><span>Estimated subtotal</span><strong>${money(decimal(lines.reduce((sum, line) => sum + cents(line.price) * line.quantity, 0)))}</strong></p><p class="shop-note">Final prices and charges are confirmed at checkout. Payment is handled by the store after your order is placed.</p></section><p data-shop-error role="alert"></p><div class="cart-actions"><button class="cart-continue" data-continue type="button">Continue shopping</button><button class="button" data-checkout type="button">Proceed to checkout ${icon('arrow', 16)}</button></div>` : '<div class="cart-empty"><h3>Your cart is empty</h3><p class="shop-note">Browse products and choose your favorites to get started.</p><button class="button" data-continue type="button">Browse products</button></div>'}`);
+  node.classList.add('shop-cart');
+  function changeQuantity(index, quantity) {
+    try {
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) throw new Error('Quantity must be between 1 and 100.');
+      lines[index].quantity = quantity; writeCart(lines);
+      const input = node.querySelector(`[data-quantity="${index}"]`); input.value = quantity;
+      input.closest('.cart-item').querySelector('.cart-item-price').textContent = money(decimal(cents(lines[index].price) * quantity));
+      node.querySelector(`[data-decrease="${index}"]`).disabled = quantity <= 1;
+      node.querySelector(`[data-increase="${index}"]`).disabled = quantity >= 100;
+      const count = lines.reduce((sum, line) => sum + line.quantity, 0);
+      node.querySelector('.cart-item-count').textContent = `${count} ${count === 1 ? 'item' : 'items'} in your cart`;
+      node.querySelector('.shop-total strong').textContent = money(decimal(lines.reduce((sum, line) => sum + cents(line.price) * line.quantity, 0)));
+      node.querySelector('[data-shop-error]').textContent = '';
+    } catch (error) { showError(node, error); }
+  }
   node.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => { try { lines.splice(Number(button.dataset.remove), 1); writeCart(lines); node.close(); showCart(); } catch (error) { showError(node, error); } });
-  node.querySelectorAll('[data-quantity]').forEach(input => input.onchange = () => {
-    try { const quantity = Number(input.value); if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) throw new Error('Quantity must be between 1 and 100.'); lines[Number(input.dataset.quantity)].quantity = quantity; writeCart(lines); node.close(); showCart(); } catch (error) { showError(node, error); }
+  node.querySelectorAll('[data-quantity]').forEach(input => input.onchange = () => changeQuantity(Number(input.dataset.quantity), Number(input.value)));
+  for (const [action, step] of [['increase', 1], ['decrease', -1]]) node.querySelectorAll(`[data-${action}]`).forEach(button => button.onclick = () => {
+    const index = Number(button.dataset[action]); changeQuantity(index, lines[index].quantity + step);
   });
+  node.querySelector('[data-continue]')?.addEventListener('click', () => node.close());
   node.querySelector('[data-checkout]')?.addEventListener('click', () => { node.close(); showCheckout(); });
+  return node;
 }
 function signInForCheckout() {
   location.assign('/customer.html?next=checkout');

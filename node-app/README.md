@@ -10,6 +10,8 @@ The landing page, catalog and customer account screens are React components in `
 
 Run `npm run build` after source changes. It bundles React locally into `public/assets/react-runtime.js`, regenerates the PWA cache version, and requires no CDN. Generated assets are ignored by Git. `npm start`, `npm run dev` and browser checks build automatically first. The existing URLs (`/`, `/staff.html`, `/customer.html`) are preserved.
 
+Interface icons use a locally vendored subset of Font Awesome Free 6.7.2 (Solid). Both React components and staff controllers share the same icon definitions in `public/shared/fontawesome-icons.js`. These assets are precached for offline use; attribution is included in `public/shared/fontawesome.LICENSE.txt`. The business logo and product photographs remain separate brand/content assets.
+
 ## Local installation
 
 Run from this directory (`node-app`). Keep the original MySQL database and the preserved business files in `var/import` until migration has been independently checked.

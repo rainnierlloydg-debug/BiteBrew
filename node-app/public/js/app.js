@@ -82,7 +82,7 @@ function renderShell() {
 async function renderPage() {
   if (!state.user) return;
   clearView(); const version = ++generation, host = app.querySelector('#page-content'); if (!host) return;
-  const root = document.createElement('div'); root.className = 'page'; host.replaceChildren(root); renderMarkup(root, '<div class="glass loading"><span class="spinner"></span><p>Loading your workspace...</p></div>');
+  const root = document.createElement('div'); root.className = 'page'; host.replaceChildren(root); renderMarkup(root, '<div class="glass loading">' + icon('spinner', 27) + '<p>Loading your workspace...</p></div>');
   const title = navigation.find(item => item[0] === page)?.[1] || page; document.querySelector('#breadcrumb-page').textContent = title;
   document.title = title + ' · ' + (state.bootstrap?.business.name || BRAND.name); app.querySelectorAll('.nav-item').forEach(button => { const active = button.dataset.nav === page; button.classList.toggle('active', active); if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
   const ctx = { state, filters, params, page, root, can, isDirty, requireOnline, go, refresh: renderPage, updateSync, updateBadges, refreshBootstrap, cachedRequest, active: () => version === generation, setDirty: value => { state.dirty = value; }, beforeLeave: fn => { leaveWork = fn; }, cleanup: fn => cleanups.push(fn), listen: (name, fn) => { window.addEventListener(name, fn); cleanups.push(() => window.removeEventListener(name, fn)); }, interval: (fn, ms) => { const timer = setInterval(fn, ms); cleanups.push(() => clearInterval(timer)); }, openOrder: id => orders.openOrder(ctx, id), snapshotNotice: (offline, syncedAt) => offline ? `<div class="notice offline"><strong>Offline · read-only snapshot / estimates</strong><br>Last synced ${e(new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(syncedAt)))}. Availability and amounts must be revalidated online.</div>` : '' };
@@ -106,12 +106,21 @@ async function sessionExpired() {
   state.user = null; setAccount(null); state.dirty = false; renderLogin('Your session expired or account changed. Local drafts are retained. Sign in to resume.'); expiring = false;
 }
 async function renderLogin(message = '') {
-  renderMarkup(app, `<main class="login-layout"><section class="login-story"><div class="brand"><img src="/icons/brand-logo.png" alt="" width="48" height="48"><div><strong>Bite &amp; Brew</strong><small>ORDER & SALES MANAGEMENT</small></div></div><div><p class="eyebrow">YOUR DAILY WORKSPACE</p><h1>Good bites.<br>Better sips.</h1><p>Pizza, burgers, milk tea and fries - orders, kitchen preparation and sales in one workspace.</p><div class="login-art">${icon('drink', 155)}</div></div><footer>Poblacion 1, Victoria, Oriental Mindoro<br>0985 986 4399 · 7:00 AM–8:00 PM</footer></section><section class="glass login-card"><a class="login-back-home" href="/">&#8592; Back to home</a><span class="badge">ADMIN &amp; STAFF ACCESS</span><h2>Welcome back.</h2><p>Admins and staff sign in here using their assigned accounts.</p>${message ? `<div class="notice">${e(message)}</div>` : ''}<form id="login-form">${field('Email address', input('email', '', 'type="email" required autocomplete="username" maxlength="190"'))}${field('Password', input('password', '', 'type="password" required autocomplete="current-password" maxlength="128"'))}<div data-error></div><button class="wide">Sign in ${icon('arrow', 16)}</button></form><p class="login-help">New staff? <button type="button" class="text-button" data-register-staff>Create staff account</button><br>Already registered? Wait for admin approval. For a password reset, contact the owner.</p><p class="login-help">Customer? <a href="/customer.html">Go to customer sign in</a></p><button class="text-button" data-install>Install app / Help</button></section></main>`);
+  renderMarkup(app, `<main class="login-layout customer-access staff-access"><section class="login-story"><img class="customer-story-photo" src="/images/hero-pizza-burger.png" width="1672" height="941" alt="Pepperoni pizza, a cheeseburger and golden fries"><div class="customer-story-content"><p class="eyebrow">YOUR DAILY WORKSPACE</p><h1>Good bites.<br><em>Better sips.</em></h1><p>Orders, kitchen and sales. One connected team.</p></div></section><section class="glass login-card"><a class="login-back-home" href="/">${icon('left', 14)} Back to home</a><a class="customer-login-brand" href="/" aria-label="Bite and Brew home"><img src="/icons/brand-logo.png" width="64" height="54" alt=""><strong>Bite &amp; Brew</strong><span>Admin &amp; staff workspace</span></a><h2>Welcome back.</h2><p>Sign in with your assigned staff account.</p>${message ? `<div class="notice" role="status">${e(message)}</div>` : ''}<form id="login-form">${field('Email address', input('email', '', 'type="email" required autocomplete="username" maxlength="190" placeholder="you@example.com"'))}${field('Password', `<div class="customer-password">${input('password', '', 'type="password" required autocomplete="current-password" maxlength="128" placeholder="Enter your password"')}<button type="button" class="password-toggle" data-toggle-password aria-label="Show password" aria-pressed="false">${icon('eye', 17)}</button></div>`)}<div data-error role="alert"></div><button type="submit" class="wide">Sign in</button></form><p class="customer-switch-prompt">New to the team?</p><button type="button" class="text-button customer-form-switch" data-register-staff>Create staff account</button><p class="staff-approval-note">New accounts need admin approval. For a password reset, contact the owner.</p><div class="customer-access-footer"><span>Looking for your customer account?</span><a href="/customer.html">Customer sign in</a><button type="button" class="text-button" data-install>Install app / Help</button></div></section></main>`);
+  const passwordButton = app.querySelector('[data-toggle-password]');
+  passwordButton.onclick = () => {
+    const password = app.querySelector('#login-form [name="password"]');
+    const visible = password.type === 'password';
+    password.type = visible ? 'text' : 'password';
+    passwordButton.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    passwordButton.setAttribute('aria-pressed', String(visible));
+    renderMarkup(passwordButton, icon(visible ? 'eye-slash' : 'eye', 17));
+  };
   app.querySelector('[data-install]').onclick = installApp;
   app.querySelector('[data-register-staff]').onclick = registerStaff;
   try { await api('/session', { authEvent: false }); } catch {}
   const form = app.querySelector('#login-form'); if (!form) return;
-  form.onsubmit = async event => { event.preventDefault(); const button = form.querySelector('button'); button.disabled = true;
+  form.onsubmit = async event => { event.preventDefault(); const button = form.querySelector('button[type=submit]'); button.disabled = true;
     try {
       if (!navigator.onLine) throw new Error('Authentication requires connectivity. Reconnect to sign in.');
       sessionEpoch++; const session = (await api('/login', { method: 'POST', data: Object.fromEntries(new FormData(form)), authEvent: false })).data;
@@ -123,21 +132,43 @@ async function renderLogin(message = '') {
   };
 }
 function registerStaff() {
-  modal('Create staff account', `<p>Submit your details for admin approval. You can sign in after the owner approves your account.</p><form id="staff-registration-form"><div class="form-grid">${field('Full name', input('name', '', 'required maxlength="120" autocomplete="name"'))}${field('Email address', input('email', '', 'type="email" required maxlength="190" autocomplete="username"'))}${field('Password', input('password', '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"'))}${field('Confirm password', input('confirmPassword', '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password"'))}</div><p>Use at least 12 characters for your password. The owner assigns your role when approving your account.</p><div data-error role="alert"></div><div class="form-actions"><button type="button" class="secondary" data-cancel>Cancel</button><button>Submit registration</button></div></form>`, (dialog, close) => {
-    const form = dialog.querySelector('form'); form.querySelector('[data-cancel]').onclick = () => close();
-    form.onsubmit = async event => {
-      event.preventDefault(); const button = form.querySelector('button:not([type=button])'); button.disabled = true;
-      try {
-        const values = Object.fromEntries(new FormData(form));
-        if (values.password !== values.confirmPassword) throw new Error('Passwords do not match.');
-        delete values.confirmPassword;
-        await api('/session', { authEvent: false });
-        const result = await api('/staff/register', { method: 'POST', data: values, authEvent: false });
-        close(true); await renderLogin(result.data.message);
-      } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); }
-      finally { button.disabled = false; }
+  const card = app.querySelector('.staff-access .login-card');
+  const home = card.querySelector('.login-back-home').outerHTML;
+  const brand = card.querySelector('.customer-login-brand').outerHTML;
+  const footer = card.querySelector('.customer-access-footer').outerHTML;
+  const passwordField = (name, title) => field(title, '<div class="customer-password">' + input(name, '', 'type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="' + (name === 'password' ? 'Create a strong password' : 'Re-enter your password') + '"') + '<button type="button" class="password-toggle" data-password-field="' + name + '" aria-label="Show ' + title.toLowerCase() + '" aria-pressed="false">' + icon('eye', 17) + '</button></div>');
+  renderMarkup(card, home + brand + '<h2>Create your staff account</h2><p>Enter your details to join the Bite &amp; Brew team.</p><form id="staff-registration-form">' + field('Full name', input('name', '', 'required maxlength="120" autocomplete="name" placeholder="Your full name"')) + field('Email address', input('email', '', 'type="email" required maxlength="190" autocomplete="username" placeholder="you@example.com"')) + passwordField('password', 'Password') + passwordField('confirmPassword', 'Confirm password') + '<p class="customer-password-hint">Use at least 12 characters for your password.</p><div data-error role="alert"></div><button type="submit" class="wide">Create staff account</button></form><p class="staff-approval-note">Your account needs admin approval before you can sign in. The owner assigns your role.</p><p class="customer-switch-prompt">Already have an account?</p><button type="button" class="text-button customer-form-switch" data-cancel>Back to sign in</button>' + footer);
+  card.querySelector('[data-install]').onclick = installApp;
+  const form = card.querySelector('#staff-registration-form');
+  const back = card.querySelector('[data-cancel]');
+  back.onclick = () => renderLogin();
+  card.querySelectorAll('[data-password-field]').forEach(button => {
+    button.onclick = () => {
+      const password = form.elements[button.dataset.passwordField];
+      const visible = password.type === 'password';
+      password.type = visible ? 'text' : 'password';
+      button.setAttribute('aria-label', (visible ? 'Hide ' : 'Show ') + (password.name === 'password' ? 'password' : 'confirm password'));
+      button.setAttribute('aria-pressed', String(visible));
+      renderMarkup(button, icon(visible ? 'eye-slash' : 'eye', 17));
     };
   });
+  form.elements.name.focus({ preventScroll: true });
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const button = form.querySelector('[type=submit]');
+    button.disabled = true; back.disabled = true;
+    button.textContent = 'Submitting registration?';
+    form.setAttribute('aria-busy', 'true');
+    try {
+      const values = Object.fromEntries(new FormData(form));
+      if (values.password !== values.confirmPassword) throw new Error('Passwords do not match.');
+      delete values.confirmPassword;
+      await api('/session', { authEvent: false });
+      const result = await api('/staff/register', { method: 'POST', data: values, authEvent: false });
+      await renderLogin(result.data.message);
+    } catch (error) { renderMarkup(form.querySelector('[data-error]'), errorMessage(error)); }
+    finally { button.disabled = false; back.disabled = false; button.textContent = 'Create staff account'; form.removeAttribute('aria-busy'); }
+  };
 }
 async function logout() {
   try {

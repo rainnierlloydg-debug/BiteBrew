@@ -135,6 +135,7 @@ try {
   await waitFor(`document.querySelector('.hero h1') && [...document.querySelectorAll('img')].every(image => image.complete && image.naturalWidth > 0)`);
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth + 1`), true, 'Landing desktop overflow');
   assert.equal(await evaluate(`document.querySelector('a[href="/customer.html"]') !== null && document.querySelector('a[href="/staff.html"]') !== null`), true, 'Landing links to both login pages');
+  assert.equal(await evaluate(`document.querySelector('[data-cart] svg')?.dataset.icon === 'cart-shopping' && document.querySelector('[data-cart] svg')?.dataset.prefix === 'fas'`), true, 'Storefront uses a local Font Awesome cart icon');
   assert.equal(await evaluate(`(async()=>{const runtime=await import('/assets/react-runtime.js');return runtime.reactVersion.startsWith('19.') && runtime.isReactRoot(document.querySelector('#landing-root'));})()`), true, 'Landing uses the local React root');
   const controlResult = await evaluate(`(async()=>{
     const {renderMarkup,isReactRoot}=await import('/assets/react-runtime.js');
@@ -155,9 +156,24 @@ try {
   await waitFor(`document.querySelector('#product-results .menu-card')`);
   await evaluate(`document.querySelector('#product-results [data-quick-add]').click()`);
   await waitFor(`document.querySelector('.shop-dialog .shop-addon-picker input')`);
+  await screenshot('product-details-mobile');
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await screenshot('product-details-desktop');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await evaluate(`document.querySelector('.shop-form').requestSubmit()`);
   await waitFor(`document.querySelector('.shop-dialog [data-remove]')`);
   assert.equal(await evaluate(`document.querySelector('[data-cart-count]').textContent`), '1', 'Single-option product adds directly from the plus button');
+  await evaluate(`document.querySelector('[data-increase]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-quantity]').value`), '2');
+  assert.equal(await evaluate(`document.querySelector('.shop-total strong').textContent.includes('300.00')`), true, 'Quantity increase updates the estimated total');
+  await evaluate(`document.querySelector('[data-decrease]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-decrease]').disabled`), true, 'Quantity cannot decrease below one');
+  await evaluate(`(()=>{const input=document.querySelector('[data-quantity]');input.value='100';input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  assert.equal(await evaluate(`document.querySelector('[data-increase]').disabled`), true, 'Quantity cannot increase above 100');
+  await evaluate(`(()=>{const input=document.querySelector('[data-quantity]');input.value='1';input.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-continue]').click();document.querySelector('[data-cart]').click();})()`);
+  assert.equal(await evaluate(`document.querySelector('[data-quantity]').value`), '1', 'Continue shopping preserves the cart');
+  assert.equal(await evaluate(`document.querySelector('.shop-cart').scrollWidth <= document.querySelector('.shop-cart').clientWidth + 1`), true, 'Cart controls fit the mobile dialog');
+  results.push('Cart quantity buttons respect bounds, update totals and preserve items when continuing shopping');
   await evaluate(`document.querySelector('[data-remove]').click(); document.querySelector('.shop-close').click()`);
   assert.equal(await evaluate(`document.querySelector('[data-cart-count]').textContent`), '0');
   await evaluate(`document.querySelector('#product-categories button:nth-child(3)').click()`);
@@ -175,6 +191,10 @@ try {
   await waitFor(`document.querySelector('[data-cart-count]')?.textContent === '2'`);
   await evaluate(`document.querySelector('[data-cart]').click(); document.querySelector('[data-checkout]').click()`);
   await waitFor(`document.querySelector('#customer-form')`);
+  await screenshot('customer-signin-mobile');
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await screenshot('customer-signin-desktop');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert.equal(customerCheckoutCount, 0, 'Guest cannot place an order');
   await evaluate(`document.querySelector('[data-switch]').click()`);
   await waitFor(`document.querySelector('#customer-form')?.elements.name`);
@@ -203,7 +223,10 @@ try {
   if (!process.argv.includes('--storefront-only')) {
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   for (const page of ['dashboard', 'pos', 'orders', 'kitchen', 'menu', 'customers', 'payments', 'reports', 'chat', 'notifications', 'archives', 'staff', 'audit', 'settings']) { await navigate(page); results.push('Rendered ' + page); }
-  await navigate('dashboard'); await screenshot('dashboard-desktop-fixture');
+  await navigate('dashboard');
+  assert.equal(await evaluate(`[...document.querySelectorAll('.nav-item>svg')].every(svg=>svg.dataset.prefix==='fas' && svg.querySelector('path')?.getAttribute('d'))`), true, 'Staff navigation uses Font Awesome icons');
+  results.push('Font Awesome UI icons render locally in storefront and staff navigation');
+  await screenshot('dashboard-desktop-fixture');
   await navigate('pos'); assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true, 'Desktop overflow');
   await evaluate(`document.querySelector('[data-add]').click()`); await waitFor(`document.querySelector('#order-footer [type=submit]:not(:disabled)')`);
   await evaluate(`document.querySelector('.addon-picker').open = true; document.querySelector('[data-addon]').click()`); await waitFor(`document.querySelector('.grand-total').textContent.includes('180.00')`);
@@ -279,6 +302,14 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await send('Page.navigate', { url: base + '/staff.html' });
   await waitFor(`document.querySelector('[data-register-staff]')`);
+  await screenshot('staff-signin-mobile');
+  await evaluate(`document.querySelector('[data-toggle-password]').click()`);
+  assert.equal(await evaluate(`document.querySelector('#login-form [name=password]').type`), 'text');
+  await evaluate(`document.querySelector('[data-toggle-password]').click()`);
+  assert.equal(await evaluate(`document.querySelector('#login-form [name=password]').type`), 'password');
+  await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await screenshot('staff-signin-desktop');
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await evaluate(`document.querySelector('[data-register-staff]').click()`);
   await waitFor(`document.querySelector('#staff-registration-form')`);
   await screenshot('staff-registration-mobile');

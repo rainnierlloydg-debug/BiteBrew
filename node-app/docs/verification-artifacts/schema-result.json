@@ -1,0 +1,8 @@
+{
+  "checkedAt": "2026-11-08T04:03:22.396Z",
+  "engine": "8.0.30",
+  "tables": 25,
+  "foreignKeys": 32,
+  "transactionDelete": "RESTRICT",
+  "scope": "Initial SQL migration only; Prisma client and API integration not tested"
+}
