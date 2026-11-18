@@ -1,3 +1,4 @@
+import { saveMedia } from '../services/media.js';
 import { Router } from 'express';
 import { customerRoutes } from './customer.js';
 import { publicRoutes } from './public.js';
@@ -5,10 +6,9 @@ import { z } from 'zod';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
 import sharp from 'sharp';
-import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { db } from '../db.js';
+import { db, textSearch } from '../db.js';
 import { config } from '../config.js';
 import { authenticated, csrfProtection } from '../middleware/session.js';
 import * as auth from '../controllers/auth.js';
@@ -65,7 +65,7 @@ export function apiRoutes(io, verificationOptions) {
     if (!req.file || !['image/jpeg', 'image/png', 'image/webp'].includes(req.file.mimetype)) fail(422, 'IMAGE_TYPE', 'Choose a JPEG, PNG or WebP image.');
     let buffer;
     try { buffer = await sharp(req.file.buffer, { limitInputPixels: 25_000_000 }).rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).webp({ quality: 88 }).toBuffer(); } catch { fail(422, 'IMAGE_INVALID', 'The image could not be decoded safely. Try another picture.'); }
-    const filename = randomUUID() + '.webp'; await fs.mkdir(config.uploads, { recursive: true }); await fs.writeFile(path.join(config.uploads, filename), buffer, { flag: 'wx' });
+    const filename = randomUUID() + '.webp'; await saveMedia(filename, buffer, { ifAbsent: true });
     await audit(db, req.user, 'image.uploaded', 'media', filename); return { path: '/uploads/' + filename };
   }));
   router.get('/orders', permit('orders'), handle(req => orders.orderList(req.user, req.query)));
@@ -93,7 +93,7 @@ export function apiRoutes(io, verificationOptions) {
   router.get('/archives/:module', permit('archives'), handle(req => req.params.module === 'products' ? menu.catalog(req.user, { ...req.query, archived: '1' }, true) : req.params.module === 'staff' ? staff.listStaff({ ...req.query, archived: '1' }) : menu.listRecords(req.user, req.params.module, { ...req.query, archived: '1' })));
   for (const action of ['archive', 'restore']) router.post('/:module/:id/' + action, permit('archives'), handle(async req => { const result = await staff.archiveRecord(req.user, key(req), req.params.module, id(req.params.id), action === 'restore'); if (req.params.module === 'staff') io.in('user:' + result.id).disconnectSockets(true); notifications.changed('catalog'); return result; }));
   router.get('/audit', permit('audit'), handle(async req => {
-    const p = pagination(req.query), where = req.query.q ? { OR: [{ action: { contains: String(req.query.q).slice(0, 100) } }, { recordType: { contains: String(req.query.q).slice(0, 100) } }] } : {};
+    const p = pagination(req.query), where = req.query.q ? { OR: [{ action: textSearch(String(req.query.q).slice(0, 100)) }, { recordType: textSearch(String(req.query.q).slice(0, 100)) }] } : {};
     const [data, total] = await db.$transaction([db.auditLog.findMany({ where, skip: p.skip, take: p.take, include: { actor: { select: { name: true } } }, orderBy: { id: 'desc' } }), db.auditLog.count({ where })]); return pageResult(data, total, p);
   }));
   router.get('/notifications', permit('notifications'), handle(req => notifications.notificationList(req.user, req.query)));

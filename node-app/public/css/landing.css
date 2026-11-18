@@ -272,3 +272,6 @@ html:has(.landing-page){scroll-padding-top:124px}
 @media(max-width:700px){.information-preview{padding:22px;border-radius:18px}.information-preview-heading{gap:12px}.information-preview-heading h2{font-size:21px}.landing-page .information-section{padding-block:44px}.information-roles{grid-template-columns:minmax(0,1fr);gap:14px}.information-roles article{padding:22px}.information-flow li{padding:20px 0}.information-flow strong{font-size:14px}}
 .landing-page .catalog-home{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
 @media(max-width:700px){.landing-page:has(.catalog-home) .header-logins{width:100%;justify-content:space-between;gap:10px}.landing-page:has(.catalog-home) .header-logins .button{padding:10px 15px;min-height:42px}}
+
+/* Checkout review must replace, rather than overlap, its detail form. */
+.shop-dialog [hidden]{display:none!important}

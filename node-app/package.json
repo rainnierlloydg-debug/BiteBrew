@@ -28,10 +28,17 @@
     "prestart": "node scripts/build.js",
     "predev": "node scripts/build.js",
     "pretest:browser": "node scripts/build.js",
-    "rebrand": "node scripts/rebrand.js"
+    "rebrand": "node scripts/rebrand.js",
+    "build:vercel": "node scripts/build-vercel.js",
+    "db:generate:postgres": "node scripts/postgres-schema.js && prisma generate --schema prisma/postgres/schema.prisma",
+    "db:deploy:postgres": "prisma migrate deploy --schema prisma/postgres/schema.prisma",
+    "cloud:configure": "node scripts/configure-cloud.js"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",
+    "@socket.io/postgres-adapter": "^0.5.0",
+    "@supabase/supabase-js": "^2.119.0",
+    "@vercel/functions": "^3.11.3",
     "bcryptjs": "3.0.2",
     "dotenv": "17.2.3",
     "express": "5.1.0",
@@ -42,6 +49,7 @@
     "mysql2": "3.15.3",
     "nodemailer": "^10.6.0",
     "pdfkit": "0.17.2",
+    "pg": "^8.23.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "sharp": "0.34.5",

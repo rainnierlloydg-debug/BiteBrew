@@ -1,9 +1,10 @@
+import { saveMedia } from '../server/services/media.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { db } from '../server/db.js';
-import { config, root } from '../server/config.js';
+import { root } from '../server/config.js';
 import { atomic, audit } from '../server/lib/atomic.js';
 import { authorize } from '../server/lib/permissions.js';
 import { settings } from '../server/services/settings.js';
@@ -32,11 +33,10 @@ function illustration(item) {
 export async function expandMenu(actor, { rebrand = false } = {}) {
   authorize(actor, 'menu');
   const source = JSON.parse(await fs.readFile(path.join(root, 'data/extended-menu.json'), 'utf8'));
-  await fs.mkdir(config.uploads, { recursive: true });
   for (const item of source.products) {
     const filename = item.code.toLowerCase() + '-illustration-v1.webp';
     item.image = '/uploads/' + filename;
-    try { await fs.access(path.join(config.uploads, filename)); } catch { await fs.writeFile(path.join(config.uploads, filename), await sharp(Buffer.from(illustration(item))).webp({ quality: 90 }).toBuffer(), { flag: 'wx' }); }
+    await saveMedia(filename, await sharp(Buffer.from(illustration(item))).webp({ quality: 90 }).toBuffer(), { ifAbsent: true });
   }
   return atomic(actor, randomUUID(), 'menu.expand.catalog', { rebrand, codes: source.products.map(item => item.code) }, async (tx, current) => {
     let productsCreated = 0;

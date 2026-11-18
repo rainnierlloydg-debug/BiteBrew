@@ -6,7 +6,7 @@ import { db } from '../db.js';
 import { csrfProtection, csrfToken, saveSession, regenerateSession } from '../middleware/session.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { fail } from '../lib/errors.js';
-import { customerQuote, checkout } from '../services/customer-checkout.js';
+import { customerQuote, checkout, customerOrders } from '../services/customer-checkout.js';
 import * as support from '../services/support-chat.js';
 import { registrationService } from '../services/registration.js';
 
@@ -52,6 +52,7 @@ export function customerRoutes(verificationOptions) {
   router.get('/profile', handle(req => safe(req.customerAccount)));
   router.use((req, res, next) => { if (req.get('x-account-id') && req.get('x-account-id') !== req.customerAccount.id) return next(Object.assign(new Error('The customer account changed in another tab. Sign in again.'), { status: 401, code: 'ACCOUNT_CHANGED' })); next(); });
   router.post('/quote', csrfProtection, handle(req => customerQuote(req.customerAccount, req.body)));
+  router.get('/orders', handle(req => customerOrders(req.customerAccount, req.query)));
   router.get('/chat', handle(req => support.customerConversation(req.customerAccount)));
   router.get('/chat/:id/messages', handle(req => support.history(req.customerAccount, req.params.id, req.query, true)));
   router.post('/chat/:id/messages', csrfProtection, handle(req => support.send(req.customerAccount, req.params.id, req.body, true)));

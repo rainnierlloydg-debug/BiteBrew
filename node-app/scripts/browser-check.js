@@ -33,6 +33,8 @@ const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format
 const paged = data => ({ data, meta: { page: 1, pageSize: 100, total: data.length, lastPage: 1 } });
 let mode = 'accept', accepted = new Map(), officialCount = 0;
 let customerSignedIn = false, customerCheckoutCount = 0, customerLogoutCount = 0, staffSignedIn = false, staffLogoutCount = 0;
+const customerOrdersFixture = [], customerCheckoutResults = new Map();
+let customerOrdersFail = false;
 let catalogPageSize = 100, activeStaffAccount = user;
 const staffAccounts = [];
 const staffChatRoom = { id: '00000000-0000-4000-8000-000000000001', name: 'DEMONSTRATION general room', unread: 0 };
@@ -80,6 +82,11 @@ const server = createServer(async (req, res) => {
       if (route === '/logout') { staffSignedIn = false; staffLogoutCount++; return json({ data: {} }); }
       if (route === '/customer/logout') { customerSignedIn = false; customerLogoutCount++; return json({ data: {} }); }
       if (route === '/customer/session') return json({ data: { customer: customerSignedIn ? customerFixture : null, csrf: 'customer-fixture-csrf' } });
+      if (route === '/customer/orders') {
+        if (!customerSignedIn) return json({ error: { message: 'Customer sign in required' } }, 401);
+        if (customerOrdersFail) return json({ error: { code: 'UNAVAILABLE', message: 'DEMONSTRATION orders temporarily unavailable' } }, 503);
+        return json(paged(customerOrdersFixture));
+      }
       if (route === '/customer/register' || route === '/customer/register/resend') return json({ data: { verificationRequired: true, token: 'a'.repeat(64), email: customerFixture.email, expiresAt: new Date(Date.now()+600000).toISOString(), resendAt: new Date(Date.now()+60000).toISOString() } });
       if (route === '/customer/register/verify' && data.code !== '123456') return json({ error: { code: 'CODE_INVALID', message: 'Incorrect confirmation code.' } }, 422);
       if (route === '/customer/login' || route === '/customer/register/verify') { customerSignedIn = true; staffSignedIn = false; return json({ data: { customer: customerFixture, csrf: 'customer-fixture-csrf' } }); }
@@ -88,7 +95,13 @@ const server = createServer(async (req, res) => {
         const quote = calculate({ items: data.items.map(line => { const product = products.find(item => item.variants.some(variant => variant.id === line.variantId)), variant = product.variants.find(item => item.id === line.variantId); return { ...line, name: product.name, variantName: variant.name, basePrice: variant.price, addons: (line.addons || []).map(id => addons.find(addon => addon.id === id)) }; }) });
         quote.quoteHash = createHash('sha256').update(quoteMaterial(quote)).digest('hex');
         if (route === '/customer/quote') return json({ data: quote });
-        customerCheckoutCount++; return json({ data: { id: randomUUID(), number: 'DEMO-CUSTOMER-1', status: 'PENDING', paymentStatus: 'UNPAID', total: quote.total } });
+        const key = req.headers['x-operation-id'];
+        if (customerCheckoutResults.has(key)) return json({ data: customerCheckoutResults.get(key) });
+        customerCheckoutCount++;
+        const order = { id: randomUUID(), number: 'DEMO-CUSTOMER-1', status: 'PENDING', paymentStatus: 'UNPAID', total: quote.total };
+        customerCheckoutResults.set(key, order);
+        customerOrdersFixture.push({ ...order, type: data.type, pickupAt: data.pickupAt || null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), paid: '0.00', refunded: '0.00', balance: quote.total, items: quote.lines.map(line => ({ ...line, id: randomUUID() })) });
+        return json({ data: order });
       }
       if (route === '/public/products') {
         const matches = products.filter(product => (!url.searchParams.get('categoryId') || product.categoryId === url.searchParams.get('categoryId')) && product.name.toLowerCase().includes((url.searchParams.get('q') || '').toLowerCase()));
@@ -321,11 +334,24 @@ try {
   assert.equal(await evaluate(`document.querySelector('.cart-addon-summary').textContent.includes('Extra tapioca pearls')`), true, 'Add-ons survive reload, registration and server quote');
   assert.equal(await evaluate(`document.querySelector('.shop-dialog').getBoundingClientRect().right <= innerWidth + 1`), true, 'Checkout dialog fits mobile viewport');
   assert.equal(await evaluate(`document.querySelector('.shop-dialog').scrollWidth <= document.querySelector('.shop-dialog').clientWidth + 1`), true, 'Checkout content has no horizontal overflow');
+  assert.equal(await evaluate('getComputedStyle(document.querySelector(".shop-form")).display'), 'none', 'Checkout review hides the detail form');
   await screenshot('customer-checkout-mobile');
+  await evaluate('(()=>{const original=window.fetch;window.fetch=async(...args)=>{const response=await original(...args);if(String(args[0]).endsWith("/api/customer/checkout")){window.fetch=original;await response.arrayBuffer();throw new TypeError("DEMONSTRATION lost checkout response");}return response;};})()');
   await evaluate(`document.querySelector('[data-place]').click()`);
+  await waitFor('document.querySelector(".message-box[open]")'); await acknowledge();
+  assert.equal(customerCheckoutCount, 1, 'Lost checkout response was already accepted once by the server');
+  assert.equal(await evaluate('document.querySelector("[data-edit]").disabled'), true, 'Uncertain checkout must be recovered before editing');
+  await evaluate('document.querySelector(".shop-close").click()');
+  await evaluate('(async()=>{const store=await import("/js/storefront.js");await store.showCheckout();})()');
+  await waitFor('document.querySelector("[data-place]")');
+  assert.equal(await evaluate('document.querySelector("[data-edit]").disabled'), true, 'Reopening preserves the uncertain checkout operation');
+  await evaluate('document.querySelector("[data-place]").click()');
   await waitFor(`document.querySelector('.shop-order-number')?.textContent === 'DEMO-CUSTOMER-1'`);
   assert.equal(customerCheckoutCount, 1);
   assert.equal(await evaluate(`document.querySelector('[data-cart-count]').textContent`), '0');
+  assert.equal(await evaluate('document.querySelector("[data-view-orders]").getAttribute("href")'), '/customer.html?view=orders');
+  assert.equal(await evaluate('[...document.querySelectorAll(".shop-actions a")].find(a=>a.textContent==="Continue browsing").getAttribute("href")'), '/menu.html');
+  results.push('Customer checkout recovers a lost response with the same operation ID and does not duplicate the order');
   await evaluate(`document.querySelector('.shop-close').click()`);
   const teaProduct = products.find(product => product.code === 'BB-MT-CLASSIC');
   await evaluate(`(async()=>{const store=await import('/js/storefront.js');const product=${JSON.stringify(teaProduct)};store.addProductToCart(product,product.variants[0],1,[product.variants[0].addons[0]]);store.addProductToCart(product,product.variants[0],1);document.querySelector('[data-cart]').click();})()`);
@@ -563,6 +589,32 @@ try {
     if(width===1440)await screenshot('customer-account-desktop');
     if(width===390)await screenshot('customer-account-mobile');
   }
+  await evaluate('document.querySelector("[data-customer-orders]").click()');
+  await waitFor('document.querySelector("[data-customer-order]")&&location.search.includes("view=orders")');
+  assert.equal(await evaluate('document.querySelector(".customer-orders").textContent.includes("DEMO-CUSTOMER-1")'),true);
+  customerOrdersFail = true;
+  await evaluate('document.querySelector("[data-orders-refresh]").click()');
+  await waitFor('document.querySelector(".message-box[open]")?.textContent.includes("orders temporarily unavailable")');
+  assert.equal(await evaluate('!!document.querySelector("[data-customer-order]")'), true, 'Temporary order refresh failure preserves the last loaded order');
+  await acknowledge(); customerOrdersFail = false;
+  customerOrdersFixture[0].status = 'READY';
+  await evaluate('document.querySelector("[data-orders-refresh]").click()');
+  await waitFor('document.querySelector(".customer-orders").textContent.includes("Ready for pickup")');
+  for(const [width,height] of [[1440,1000],[390,844],[320,568]]) {
+    await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<761});
+    assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'),true,'Customer orders fit '+width);
+    if(width===1440)await screenshot('customer-orders-desktop');
+    if(width===390)await screenshot('customer-orders-mobile');
+  }
+  await evaluate('window.fixtureReloadPending=true');await send('Page.reload');
+  await waitFor('!window.fixtureReloadPending&&document.querySelector("[data-customer-order]")');
+  await evaluate('document.querySelector("[data-orders-back]").click()');
+  await waitFor('document.querySelector("[data-customer-orders]")');
+  await evaluate('history.back()');
+  await waitFor('document.querySelector("[data-customer-order]")');
+  await evaluate('history.forward()');
+  await waitFor('document.querySelector("[data-customer-orders]")');
+  results.push('Customer My orders shows saved items and payment balance, refreshes status, fits mobile and survives reload');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   assert.equal(await evaluate('document.querySelectorAll(".customer-portal-header nav a").length'),0,'Account header has no Menu/Home links');
   await evaluate('document.querySelector(".customer-menu-card a").click()');

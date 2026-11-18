@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { db, jsonValue } from '../db.js';
+import { db, jsonValue, textSearch } from '../db.js';
 import { atomic, audit, lockOrder, sha256 } from '../lib/atomic.js';
 import { fail } from '../lib/errors.js';
 import { authorize, authorizeOrderStatus } from '../lib/permissions.js';
@@ -110,7 +110,7 @@ export async function changeStatus(actor, key, id, input) {
 }
 export async function orderList(actor, query = {}, kitchen = false) {
   const p = pagination(query), q = String(query.q || '').slice(0, 120);
-  const where = { ...(kitchen ? { status: { in: ['CONFIRMED', 'PREPARING', 'READY'] } } : {}), ...(!kitchen && query.status ? { status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED']).parse(query.status) } : {}), ...(query.customerId ? { customerId: z.uuid().parse(query.customerId) } : {}), ...(q ? { OR: [{ number: { contains: q } }, ...(!kitchen ? [{ customerName: { contains: q } }, { contact: { contains: q } }] : [])] } : {}) };
+  const where = { ...(kitchen ? { status: { in: ['CONFIRMED', 'PREPARING', 'READY'] } } : {}), ...(!kitchen && query.status ? { status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED']).parse(query.status) } : {}), ...(query.customerId ? { customerId: z.uuid().parse(query.customerId) } : {}), ...(q ? { OR: [{ number: textSearch(q) }, ...(!kitchen ? [{ customerName: textSearch(q) }, { contact: textSearch(q) }] : [])] } : {}) };
   if (query.from) where.createdAt = { ...where.createdAt, gte: new Date(z.iso.date().parse(query.from) + 'T00:00:00+08:00') };
   if (query.to) { const end = new Date(z.iso.date().parse(query.to) + 'T00:00:00+08:00'); end.setUTCDate(end.getUTCDate() + 1); where.createdAt = { ...where.createdAt, lt: end }; }
   const [orders, total] = await db.$transaction([db.order.findMany({ where, skip: p.skip, take: p.take, orderBy: kitchen ? { confirmedAt: 'asc' } : { createdAt: 'desc' }, include: { items: { where: { removedAt: null } } } }), db.order.count({ where })]);

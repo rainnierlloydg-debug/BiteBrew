@@ -1,9 +1,8 @@
+import { mediaExists } from './media.js';
 import { z } from 'zod';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { db } from '../db.js';
-import { config } from '../config.js';
+import { db, Prisma, textSearch } from '../db.js';
 import { atomic, audit } from '../lib/atomic.js';
 import { fail } from '../lib/errors.js';
 import { authorize } from '../lib/permissions.js';
@@ -22,7 +21,7 @@ const productSchema = z.object({
 export async function catalog(actor, query = {}, management = false) {
   const p = pagination(query), owner = actor.role === 'OWNER';
   if (query.archived === '1' && !owner) fail(403, 'FORBIDDEN', 'Only the owner can view archived records.');
-  const where = { archivedAt: owner && query.archived === '1' ? { not: null } : null, ...(!management ? { active: true, category: { archivedAt: null, active: true } } : {}), ...(query.categoryId ? { categoryId: uuid.parse(query.categoryId) } : {}), ...(query.q ? { OR: [{ name: { contains: String(query.q).slice(0, 120) } }, { code: { contains: String(query.q).slice(0, 120) } }] } : {}) };
+  const where = { archivedAt: owner && query.archived === '1' ? { not: null } : null, ...(!management ? { active: true, category: { archivedAt: null, active: true } } : {}), ...(query.categoryId ? { categoryId: uuid.parse(query.categoryId) } : {}), ...(query.q ? { OR: [{ name: textSearch(String(query.q).slice(0, 120)) }, { code: textSearch(String(query.q).slice(0, 120)) }] } : {}) };
   const [rows, total] = await db.$transaction([db.menuItem.findMany({ where, include: { category: true, variants: { include: { addons: { include: { addon: true } } }, orderBy: { createdAt: 'asc' } } }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], skip: p.skip, take: p.take }), db.menuItem.count({ where })]);
   return pageResult(rows.map(row => ({ ...row, name: brandText(row.name), description: brandText(row.description), variants: row.variants.map(variant => ({ ...variant, addons: variant.addons.map(link => link.addon) })) })), total, p);
 }
@@ -32,7 +31,7 @@ export async function saveProduct(actor, key, id, input) {
   const names = data.variants.map(v => v.name.toLowerCase());
   if (new Set(names).size !== names.length) fail(422, 'VARIANTS', 'Variant names must be unique within the product.');
   if (data.image) {
-    try { await fs.access(path.join(config.uploads, path.basename(data.image))); } catch { fail(422, 'IMAGE_MISSING', 'Upload the selected picture again.'); }
+    if (!await mediaExists(path.basename(data.image))) fail(422, 'IMAGE_MISSING', 'Upload the selected picture again.');
   }
   return atomic(actor, key, 'product.save.' + (id || 'new'), data, async (tx, current) => {
     const before = id ? await tx.menuItem.findUnique({ where: { id }, include: { variants: true } }) : null;
@@ -44,7 +43,7 @@ export async function saveProduct(actor, key, id, input) {
     // JSON null is supplied through Prisma's explicit sentinel below when replacing a framed image.
     if ('imageFrame' in fields) delete fields.imageFrame;
     const product = id ? await tx.menuItem.update({ where: { id }, data: fields }) : await tx.menuItem.create({ data: { ...fields, createdAt: new Date() } });
-    if (before?.imageFrame && before.image !== (data.image || null)) await tx.$executeRaw`UPDATE menu_items SET imageFrame = NULL WHERE id = ${product.id}`;
+    if (before?.imageFrame && before.image !== (data.image || null)) await tx.menuItem.update({ where: { id: product.id }, data: { imageFrame: Prisma.DbNull } });
     const kept = [];
     for (const variant of data.variants) {
       const values = { name: variant.name, price: variant.price, active: variant.active };
@@ -69,7 +68,7 @@ export async function listRecords(actor, module, query = {}) {
   const p = pagination(query), hasArchive = ['categories', 'customers'].includes(module);
   if (query.archived === '1' && actor.role !== 'OWNER') fail(403, 'FORBIDDEN', 'Only the owner can view archived records.');
   const q = String(query.q || '').slice(0, 120);
-  const where = { ...(hasArchive ? { archivedAt: query.archived === '1' ? { not: null } : null } : {}), ...(actor.role !== 'OWNER' ? { active: true } : {}), ...(q ? { OR: [{ name: { contains: q } }, ...(module === 'customers' ? [{ contact: { contains: q } }] : [])] } : {}) };
+  const where = { ...(hasArchive ? { archivedAt: query.archived === '1' ? { not: null } : null } : {}), ...(actor.role !== 'OWNER' ? { active: true } : {}), ...(q ? { OR: [{ name: textSearch(q) }, ...(module === 'customers' ? [{ contact: textSearch(q) }] : [])] } : {}) };
   const [data, total] = await db.$transaction([db[model].findMany({ where, skip: p.skip, take: p.take, orderBy: { name: 'asc' }, ...(module === 'addons' ? { include: { variants: true } } : {}) }), db[model].count({ where })]);
   return pageResult(data, total, p);
 }

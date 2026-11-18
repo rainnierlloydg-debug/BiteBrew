@@ -6,7 +6,7 @@ import { sessionMiddleware } from './middleware/session.js';
 import { roomAccess, joinRoom, sendMessage, chatRate } from './services/chat.js';
 import { setRealtime } from './services/notifications.js';
 export function attachRealtime(server) {
-  const io = new Server(server, { transports: ['websocket'], maxHttpBufferSize: 16000, serveClient: true, allowRequest: (req, callback) => callback(null, req.headers.origin === config.origin) });
+  const io = new Server(server, { transports: ['websocket'], maxHttpBufferSize: 16000, serveClient: true, allowRequest: (req, callback) => callback(null, config.allowedOrigins.includes(req.headers.origin)) });
   io.engine.use(sessionMiddleware);
   async function currentUser(socket) {
     const session = await db.session.findUnique({ where: { id: socket.request.sessionID }, include: { user: true } });

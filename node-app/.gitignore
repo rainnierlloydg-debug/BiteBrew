@@ -4,3 +4,10 @@ node_modules/
 var/
 coverage/
 public/assets/
+
+.vercel
+.env*
+
+!.env.example
+
+!.env.supabase.example

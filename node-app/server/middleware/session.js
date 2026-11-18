@@ -24,7 +24,7 @@ export const csrfToken = req => req.session.csrf || (req.session.csrf = randomBy
 export function csrfProtection(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   try {
-    if (req.get('origin') && req.get('origin') !== config.origin) fail(403, 'ORIGIN_REJECTED', 'This origin is not allowed.');
+    if (req.get('origin') && !config.allowedOrigins.includes(req.get('origin'))) fail(403, 'ORIGIN_REJECTED', 'This origin is not allowed.');
     const expected = Buffer.from(req.session.csrf || ''), received = Buffer.from(req.get('x-csrf-token') || '');
     if (!expected.length || expected.length !== received.length || !timingSafeEqual(expected, received)) fail(419, 'CSRF_EXPIRED', 'Your security token expired. Refresh your session and retry.');
     next();

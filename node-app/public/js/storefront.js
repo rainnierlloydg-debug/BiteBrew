@@ -150,34 +150,43 @@ export async function showCheckout() {
     const form = node.querySelector('form');
     form.elements.type.onchange = () => { const scheduled = form.elements.type.value === 'PICKUP'; node.querySelector('[data-pickup]').hidden = !scheduled; form.elements.pickupAt.required = scheduled; };
     const review = node.querySelector('[data-review]');
-    function displayQuote(payload, quote, key) {
+    function displayQuote(payload, quote, key, attempted = false) {
+      let awaitingResult = attempted;
       form.hidden = true;
       renderMarkup(review, `${lineSummary(quote.lines.map(line => ({ ...line, price: line.unitPrice })))}<div class="shop-breakdown"><p>Subtotal <b>${money(quote.subtotal)}</b></p><p>Tax <b>${money(quote.tax)}</b></p><p>Service charge <b>${money(quote.service)}</b></p><p class="shop-total">Total <strong>${money(quote.total)}</strong></p></div><p class="shop-note">${payload.type === 'PICKUP' ? 'Scheduled pickup: ' + e(new Date(payload.pickupAt).toLocaleString()) : 'Collect at the store'}<br>Pending confirmation. Payment is collected by the store.</p><p data-submit-error role="alert"></p><div class="shop-actions"><button class="button" data-place>Place order</button><button class="shop-link" data-edit>Edit details</button></div>`);
-      review.querySelector('[data-edit]').onclick = () => { sessionStorage.removeItem(PENDING); renderMarkup(review, ''); form.hidden = false; };
+      review.querySelector('[data-edit]').disabled = awaitingResult;
+      if (awaitingResult) review.querySelector('[data-submit-error]').textContent = 'Your previous order confirmation was interrupted. Retry this same order to check its result safely before making changes.';
+      review.querySelector('[data-edit]').onclick = () => { if (awaitingResult) return; sessionStorage.removeItem(PENDING); renderMarkup(review, ''); form.hidden = false; };
       review.querySelector('[data-place]').onclick = async event => {
         const button = event.currentTarget; button.disabled = true; review.querySelector('[data-edit]').disabled = true;
         try {
-          sessionStorage.setItem(PENDING, JSON.stringify({ accountId: account.id, payload, quote, key }));
+          sessionStorage.setItem(PENDING, JSON.stringify({ accountId: account.id, payload, quote, key, attempted: true }));
+          awaitingResult = true;
           const order = (await api('/customer/checkout', { method: 'POST', data: payload, operationId: key, authEvent: false })).data;
-          sessionStorage.removeItem(PENDING);
-          const current = readCart();
-          const submitted = new Map(payload.items.map(item => [lineKey(item), item.quantity]));
-          writeCart(current.flatMap(line => { const quantity = line.quantity - (submitted.get(lineKey(line)) || 0); return quantity > 0 ? [{ ...line, quantity }] : []; }));
-          renderMarkup(body, `<h3>Order placed</h3><p class="shop-order-number">${e(order.number)}</p><p>Status: <strong>Pending confirmation</strong></p><p>Total: <strong>${money(order.total)}</strong></p><p>Payment has not been collected. The store will review your order.</p><a class="button" href="/">Continue browsing</a>`);
+          if (!order?.id || !order.number) throw new Error('The order confirmation was interrupted. Retry the same order to check its result safely.');
+          let cartWarning = '';
+          try {
+            const current = readCart();
+            const submitted = new Map(payload.items.map(item => [lineKey(item), item.quantity]));
+            writeCart(current.flatMap(line => { const quantity = line.quantity - (submitted.get(lineKey(line)) || 0); return quantity > 0 ? [{ ...line, quantity }] : []; }));
+            sessionStorage.removeItem(PENDING);
+          } catch { cartWarning = 'Your order is placed, but this browser could not update the saved cart. Do not place it again; check My orders or retry this same confirmation.'; }
+          renderMarkup(body, `<h3>Order placed</h3><p class="shop-order-number">${e(order.number)}</p><p>Status: <strong>Pending confirmation</strong></p><p>Total: <strong>${money(order.total)}</strong></p><p>Payment has not been collected. The store will review your order.</p>${cartWarning ? `<p class="notice" role="status">${e(cartWarning)}</p>` : ''}<div class="shop-actions"><a class="button" data-view-orders href="/customer.html?view=orders">View my orders</a><a class="shop-link" href="/menu.html">Continue browsing</a></div>`);
         } catch (error) {
           if ([401, 419].includes(error.status)) { node.close(); return signInForCheckout(); }
           if (error.code === 'QUOTE_CHANGED' && error.details?.quote) {
             sessionStorage.removeItem(PENDING); displayQuote({ ...payload, quoteHash: error.details.quote.quoteHash }, error.details.quote, crypto.randomUUID());
             review.querySelector('[data-submit-error]').textContent = error.message + ' Please confirm the new total.'; showMessage(error.message + ' Please confirm the new total.', 'warning'); return;
           }
-          review.querySelector('[data-submit-error]').textContent = error.message + (error.status === 0 ? ' Retry to check the same order safely.' : ''); showMessage(review.querySelector('[data-submit-error]').textContent, 'error');
+          if (error.status >= 400 && error.status < 500 && error.code !== 'OPERATION_REUSED') awaitingResult = false;
+          review.querySelector('[data-submit-error]').textContent = error.message + (awaitingResult ? ' Retry to check the same order safely before making changes.' : ''); showMessage(review.querySelector('[data-submit-error]').textContent, 'error');
           if (error.code === 'MENU_CONFLICT') { sessionStorage.removeItem(PENDING); review.querySelector('[data-place]').hidden = true; }
-        } finally { if (button.isConnected) { button.disabled = false; review.querySelector('[data-edit]').disabled = false; } }
+        } finally { if (button.isConnected) { button.disabled = false; review.querySelector('[data-edit]').disabled = awaitingResult; } }
       };
     }
     let pending;
     try { pending = JSON.parse(sessionStorage.getItem(PENDING)); } catch {}
-    if (pending?.accountId === account.id) displayQuote(pending.payload, pending.quote, pending.key);
+    if (pending?.accountId === account.id && pending.payload?.items?.length && pending.quote?.lines?.length && uuid(pending.key)) displayQuote(pending.payload, pending.quote, pending.key, pending.attempted !== false);
     form.onsubmit = async event => {
       event.preventDefault(); const button = form.querySelector('button'); button.disabled = true;
       try {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { db } from '../db.js';
+import { db, textSearch } from '../db.js';
 import { atomic, audit } from '../lib/atomic.js';
 import { fail } from '../lib/errors.js';
 import { safeUser, authorize } from '../lib/permissions.js';
@@ -8,7 +8,7 @@ import { DEFAULT_STAFF_PASSWORD } from '../lib/default-password.js';
 import { pagination, pageResult } from '../lib/time.js';
 const schema = z.object({ name: z.string().trim().min(1).max(120), email: z.email().max(190), role: z.enum(['OWNER', 'CASHIER', 'KITCHEN']), active: z.boolean(), password: z.string().min(12).max(128).optional() }).strict();
 export async function listStaff(query = {}) {
-  const p = pagination(query), where = { archivedAt: query.archived === '1' ? { not: null } : null, ...(query.q ? { OR: [{ name: { contains: String(query.q).slice(0, 120) } }, { email: { contains: String(query.q).slice(0, 120) } }] } : {}) };
+  const p = pagination(query), where = { archivedAt: query.archived === '1' ? { not: null } : null, ...(query.q ? { OR: [{ name: textSearch(String(query.q).slice(0, 120)) }, { email: textSearch(String(query.q).slice(0, 120)) }] } : {}) };
   if (query.archived !== '1') where.registrationPending = query.status === 'pending';
   const [rows, total] = await db.$transaction([db.user.findMany({ where, skip: p.skip, take: p.take, orderBy: { name: 'asc' } }), db.user.count({ where })]);
   return pageResult(rows.map(safeUser), total, p);

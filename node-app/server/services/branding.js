@@ -1,8 +1,9 @@
+import { saveMedia } from './media.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { db } from '../db.js';
-import { config, root } from '../config.js';
+import { db, textSearch } from '../db.js';
+import { root } from '../config.js';
 import { brandBusiness, brandText } from '../../public/shared/brand.js';
 
 // Idempotent data migration for installations created before the rebrand.
@@ -10,9 +11,7 @@ import { brandBusiness, brandText } from '../../public/shared/brand.js';
 export async function applyBranding() {
   const bytes = await fs.readFile(path.join(root, 'data/product-photos.png'));
   const filename = 'supplied-products-' + createHash('sha256').update(bytes).digest('hex').slice(0, 16) + '.png';
-  await fs.mkdir(config.uploads, { recursive: true });
-  try { await fs.writeFile(path.join(config.uploads, filename), bytes, { flag: 'wx' }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; }
+  await saveMedia(filename, bytes, { ifAbsent: true });
   return db.$transaction(async tx => {
     const stored = await tx.setting.findUnique({ where: { id: 1 } });
     if (stored) {
@@ -22,7 +21,7 @@ export async function applyBranding() {
       }
     }
     const products = await tx.menuItem.findMany({ where: { OR: [
-      { name: { contains: 'Ella' } }, { code: 'EP-ELLAS-BEST' },
+      { name: textSearch('Ella') }, { code: 'EP-ELLAS-BEST' },
       { image: { startsWith: '/uploads/supplied-products-' } },
     ] } });
     let updated = 0;

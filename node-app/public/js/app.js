@@ -48,9 +48,11 @@ function updateConnection() {
 }
 async function updateSync() {
   if (!state.user || !can('pos')) return;
-  const drafts = await listDrafts(state.user.id), count = drafts.filter(draft => draft.status !== 'SYNCED').length;
+  const userId = state.user.id, epoch = sessionEpoch;
+  const [drafts, menu] = await Promise.all([listDrafts(userId), cached(userId, 'catalog')]);
+  if (state.user?.id !== userId || sessionEpoch !== epoch || !can('pos')) return;
+  const count = drafts.filter(draft => draft.status !== 'SYNCED').length;
   document.querySelectorAll('[data-badge=drafts]').forEach(element => { element.textContent = count ? String(count) : ''; element.hidden = !count; });
-  const menu = await cached(state.user.id, 'catalog');
   const status = document.querySelector('[data-sync-status]'); if (status) status.textContent = count ? `${count} local draft${count === 1 ? '' : 's'} not accepted` : menu ? 'Offline drafts ready' : 'Connect to prepare offline drafts';
 }
 async function updateBadges() {

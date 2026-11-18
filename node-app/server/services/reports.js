@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { Prisma } from '@prisma/client';
-import { db } from '../db.js';
+import { db, Prisma, textSearch } from '../db.js';
 import { fail } from '../lib/errors.js';
 import { authorize } from '../lib/permissions.js';
 import { reportingRange, pagination, pageResult, localDate } from '../lib/time.js';
@@ -26,7 +25,7 @@ function filter(actor, query) {
   const status = query.status ? z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED']).parse(query.status) : null;
   const method = query.method ? z.enum(['CASH', 'GCASH']).parse(query.method) : null;
   const itemId = query.variantId ? z.uuid().parse(query.variantId) : null;
-  const common = { ...(status ? { status } : {}), ...(q ? { OR: [{ number: { contains: q } }, { customerName: { contains: q } }] } : {}) };
+  const common = { ...(status ? { status } : {}), ...(q ? { OR: [{ number: textSearch(q) }, { customerName: textSearch(q) }] } : {}) };
   return { range, staffId, status, method, itemId, common };
 }
 const sum = (rows, field) => rows.reduce((value, row) => value + cents(String(row[field] || '0')), 0);

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
-import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { db, jsonValue } from '../db.js';
+import { db, jsonValue, Prisma } from '../db.js';
 import { fail } from './errors.js';
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 export const audit = (tx, actor, action, recordType, recordId, before = null, after = null) => tx.auditLog.create({ data: { actorId: actor.id, action, recordType, recordId: recordId ? String(recordId) : null, ...(before !== null ? { before: jsonValue(before) } : {}), ...(after !== null ? { after: jsonValue(after) } : {}), createdAt: new Date() } });

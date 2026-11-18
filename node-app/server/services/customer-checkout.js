@@ -1,12 +1,27 @@
 import { z } from 'zod';
-import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
-import { db, jsonValue } from '../db.js';
+import { db, jsonValue, Prisma } from '../db.js';
 import { orderInput, priceOrder } from './orders.js';
 import { sha256 } from '../lib/atomic.js';
-import { localDate } from '../lib/time.js';
+import { localDate, pagination, pageResult } from '../lib/time.js';
 import { fail } from '../lib/errors.js';
 import { changed } from './notifications.js';
+import { cents, decimal } from '../../public/shared/calculation.js';
+
+export async function customerOrders(account, query = {}) {
+  const p = pagination(query), where = { accountId: account.id };
+  const [rows, total] = await db.$transaction([
+    db.customerCheckout.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: p.skip, take: p.take, select: { order: { select: {
+      id: true, number: true, type: true, status: true, total: true, paid: true, refunded: true, pickupAt: true, createdAt: true, updatedAt: true,
+      items: { where: { removedAt: null }, select: { id: true, name: true, variantName: true, quantity: true, unitPrice: true, subtotal: true, addons: true } },
+    } } } }),
+    db.customerCheckout.count({ where }),
+  ]);
+  return pageResult(rows.map(({ order }) => {
+    const balance = Math.max(0, cents(String(order.total)) - cents(String(order.paid)));
+    return { ...jsonValue(order), balance: decimal(balance), paymentStatus: balance === 0 ? 'PAID' : cents(String(order.paid)) > 0 ? 'PARTIAL' : 'UNPAID' };
+  }), total, p);
+}
 
 const input = orderInput.pick({ type: true, contact: true, pickupAt: true, instructions: true, items: true, quoteHash: true }).extend({ type: z.enum(['TAKEAWAY', 'PICKUP']), contact: z.string().trim().min(1).max(40) });
 function dataFor(account, payload) {

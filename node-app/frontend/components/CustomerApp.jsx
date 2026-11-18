@@ -5,6 +5,7 @@ import { api, setAccount } from '/js/api.js';
 import { mountSupportChat } from '/js/support-chat.js';
 import { isWorkspaceLocked } from '/js/workspace-session.js';
 import { prepareAccountSession, staffDestination } from '/js/access-session.js';
+import { CustomerOrders } from './CustomerOrders.jsx';
 
 function Notice({ error }) {
   useEffect(() => { if (error) showMessage(error.message || String(error), 'error'); }, [error]);
@@ -76,7 +77,7 @@ function CustomerChat({ onBack, onExpired, onLogout, busy, fromMenu }) {
   return <CustomerShell onLogout={onLogout} busy={busy}><div className="customer-page-heading"><button type="button" className="text-button customer-back" data-back="" onClick={onBack}><Icon name="left" size={14} /> {fromMenu ? 'Back to menu' : 'Back to my account'}</button><p className="eyebrow">HERE TO HELP</p><h1>Chat with staff</h1><p>Ask about the menu, availability or your order.</p></div><Notice error={error} /><section className="customer-support customer-chat-panel" data-support="" ref={host}><p>Opening conversation...</p></section></CustomerShell>;
 }
 export function CustomerApp() {
-  const [customer, setCustomer] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState(null), [chat, setChat] = useState(false), [busy, setBusy] = useState(false);
+  const [customer, setCustomer] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState(null), [chat, setChat] = useState(false), [busy, setBusy] = useState(false), [orders, setOrders] = useState(false);
   const expired = React.useCallback(() => { setAccount(null); setCustomer(null); setChat(false); location.replace('/login.html'); }, []);
   const session = React.useCallback(async (result, explicitSignIn = false) => {
     if (result.user && !explicitSignIn && await isWorkspaceLocked()) {
@@ -87,10 +88,12 @@ export function CustomerApp() {
     if (result.user) { location.replace(staffDestination(result.user)); return; }
     const value = result.customer;
     setAccount(value?.id || null); setCustomer(value || null); setChat(new URLSearchParams(location.search).get('view') === 'chat');
+    setOrders(new URLSearchParams(location.search).get('view') === 'orders');
     if (value && new URLSearchParams(location.search).get('next') === 'checkout') location.replace('/menu.html?checkout=1#menu');
     else if (value && new URLSearchParams(location.search).get('next') === 'chat') location.replace('/customer.html?view=chat&from=menu');
+    else if (value && new URLSearchParams(location.search).get('next') === 'orders') location.replace('/customer.html?view=orders');
     else if (value && location.pathname === '/login.html') location.replace('/customer.html');
-    else if (!value && location.pathname !== '/login.html') location.replace('/login.html' + (new URLSearchParams(location.search).get('next') === 'checkout' ? '?next=checkout' : new URLSearchParams(location.search).get('view') === 'chat' ? '?next=chat' : ''));
+    else if (!value && location.pathname !== '/login.html') location.replace('/login.html' + (new URLSearchParams(location.search).get('next') === 'checkout' ? '?next=checkout' : new URLSearchParams(location.search).get('view') === 'chat' ? '?next=chat' : new URLSearchParams(location.search).get('view') === 'orders' ? '?next=orders' : ''));
   }, []);
   const load = React.useCallback(async () => {
     setLoading(true); setError(null);
@@ -100,17 +103,19 @@ export function CustomerApp() {
   }, [session]);
   useEffect(() => { load(); const restored = event => { if (event.persisted) load(); }; window.addEventListener('pageshow', restored); return () => window.removeEventListener('pageshow', restored); }, [load]);
   useEffect(() => {
-    const changed = () => setChat(new URLSearchParams(location.search).get('view') === 'chat');
+    const changed = () => { setChat(new URLSearchParams(location.search).get('view') === 'chat'); setOrders(new URLSearchParams(location.search).get('view') === 'orders'); };
     window.addEventListener('popstate', changed);
     return () => window.removeEventListener('popstate', changed);
   }, []);
   function openChat() {
-    history.pushState(null, '', '/customer.html?view=chat'); setChat(true); window.scrollTo(0, 0);
+    history.pushState(null, '', '/customer.html?view=chat'); setOrders(false); setChat(true); window.scrollTo(0, 0);
   }
   function closeChat() {
     if (new URLSearchParams(location.search).get('from') === 'menu') { location.assign('/menu.html'); return; }
     history.replaceState(null, '', '/customer.html'); setChat(false); window.scrollTo(0, 0);
   }
+  function openOrders() { history.pushState(null, '', '/customer.html?view=orders'); setChat(false); setOrders(true); window.scrollTo(0, 0); }
+  function closeOrders() { history.pushState(null, '', '/customer.html'); setOrders(false); window.scrollTo(0, 0); }
   async function logout() {
     if (busy) return;
     setBusy(true);
@@ -124,12 +129,14 @@ export function CustomerApp() {
   if (error && !customer) return <Layout><h2>Sign-in unavailable</h2><Notice error={error} /><button data-retry="" onClick={load}>Try again</button></Layout>;
   if (!customer) return location.pathname === '/login.html' ? <CustomerForm onSession={session} /> : <main className="loading-screen">Opening sign in...</main>;
   if (chat) return <CustomerChat onBack={closeChat} onExpired={expired} onLogout={logout} busy={busy} fromMenu={new URLSearchParams(location.search).get('from') === 'menu'} />;
+  if (orders) return <CustomerShell onLogout={logout} busy={busy} onChat={openChat}><CustomerOrders onBack={closeOrders} onExpired={expired} /></CustomerShell>;
   return <CustomerShell onLogout={logout} busy={busy} onChat={openChat}>
     <div className="customer-page-heading"><p className="eyebrow">MY ACCOUNT</p><h1>Welcome back.</h1><p>A good bite, a favorite sip. Make your next visit yours.</p></div>
     <Notice error={error} />
     <div className="customer-home-grid"><section className="customer-home-actions" aria-label="Customer actions">
       <article className="customer-menu-card"><div><span className="customer-card-kicker">SOMETHING GOOD AWAITS</span><h2>Find your<br />next favorite.</h2><p>Explore the menu, choose your add-ons and build your order.</p><a className="button" href="/menu.html">Browse menu <Icon name="arrow" size={16} /></a></div><img src="/images/hero-pizza-burger.png" width="1672" height="941" alt="Pizza, a cheeseburger and fries" /></article>
       <button type="button" className="customer-chat-action" data-customer-chat="" onClick={openChat}><span className="customer-action-icon"><Icon name="chat" size={23} /></span><span><strong>Chat with staff</strong><small>Questions about the menu or your order? We're here to help.</small></span><Icon name="arrow" size={18} /></button>
+      <button type="button" className="customer-chat-action" data-customer-orders="" onClick={openOrders}><span className="customer-action-icon"><Icon name="orders" size={23} /></span><span><strong>My orders</strong><small>View your orders, current status and payment balance.</small></span><Icon name="arrow" size={18} /></button>
     </section><aside className="customer-profile-card" aria-labelledby="customer-profile-title"><div className="customer-profile-avatar" aria-hidden="true">{customer.name.trim().charAt(0).toUpperCase()}</div><p className="customer-card-kicker">CUSTOMER ACCOUNT</p><h2 id="customer-profile-title">{customer.name}</h2><dl><div><dt>Email address</dt><dd>{customer.email}</dd></div></dl><p className="customer-profile-note"><Icon name="users" size={16} /> Your account for ordering and keeping in touch with our team.</p></aside></div>
   </CustomerShell>;
 }

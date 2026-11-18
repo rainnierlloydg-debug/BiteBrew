@@ -1,8 +1,9 @@
+import { saveMedia } from '../server/services/media.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { db } from '../server/db.js';
-import { root, config } from '../server/config.js';
+import { root } from '../server/config.js';
 import { audit } from '../server/lib/atomic.js';
 import { expandMenu } from './expand-menu.js';
 import { seedCategoryAddons } from './seed-category-addons.js';
@@ -13,7 +14,7 @@ export async function seedMenu() {
   if (!owner) throw new Error('Create an owner account before importing the supplied menu.');
   const menu = JSON.parse(await fs.readFile(path.join(root, 'data/menu.json'), 'utf8')), photos = JSON.parse(await fs.readFile(path.join(root, 'data/product-photos.json'), 'utf8'));
   const bytes = await fs.readFile(path.join(root, 'data/product-photos.png')), filename = 'supplied-products-' + createHash('sha256').update(bytes).digest('hex').slice(0, 16) + '.png';
-  await fs.mkdir(config.uploads, { recursive: true }); await fs.writeFile(path.join(config.uploads, filename), bytes);
+  await saveMedia(filename, bytes, { ifAbsent: true });
   const result = await db.$transaction(async tx => {
     const category = await tx.category.upsert({ where: { name: 'Pizzas' }, create: { name: 'Pizzas', createdAt: new Date() }, update: {} });
     const createdVariants = [], allVariants = []; let productsCreated = 0;

@@ -22,9 +22,9 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
   const sockets = [];
   t.after(async () => { for (const socket of sockets) socket.disconnect(); await application.close(); });
   function client() {
-    return { cookie: '', csrf: '', user: null, async request(route, { method = 'GET', data, key = randomUUID(), status = 200, raw = false, noCsrf = false } = {}) {
+    return { cookie: '', csrf: '', user: null, async request(route, { method = 'GET', data, key = randomUUID(), status = 200, raw = false, noCsrf = false, headers = {} } = {}) {
       if (route === '/customer/register' && data && !Object.hasOwn(data, 'confirmPassword')) data = { ...data, confirmPassword: data.password };
-      const response = await fetch(base + '/api' + route, { method, headers: { Cookie: this.cookie, Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json', ...(noCsrf ? {} : { 'X-CSRF-Token': this.csrf }), 'X-Operation-ID': key }, body: data === undefined ? undefined : JSON.stringify(data) });
+      const response = await fetch(base + '/api' + route, { method, headers: { Cookie: this.cookie, Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json', ...(noCsrf ? {} : { 'X-CSRF-Token': this.csrf }), 'X-Operation-ID': key, ...headers }, body: data === undefined ? undefined : JSON.stringify(data) });
       const cookies = response.headers.getSetCookie(); if (cookies.length) this.cookie = cookies[0].split(';')[0];
       if (raw) { assert.equal(response.status, status); return response; }
       const result = await response.json(); assert.equal(response.status, status, method + ' ' + route + ': ' + JSON.stringify(result.error || ''));
@@ -38,6 +38,7 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
   await t.test('customer checkout requires login, revalidates prices and deduplicates concurrent submissions', async () => {
     const buyer = client();
     await anonymous.request('/customer/checkout', { method: 'POST', data: {}, status: 401 });
+    await anonymous.request('/customer/orders', { status: 401 });
     await buyer.request('/customer/session');
     const profile = (await buyer.request('/customer/register', { method: 'POST', data: { name: 'DEMONSTRATION checkout customer', email: `checkout-${suffix}@example.test`, contact: 'fixture contact', password } })).data.customer;
     const account = await db.customerAccount.findUnique({ where: { id: profile.id } });
@@ -65,15 +66,34 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
       assert.equal(String(order.paid), '0');
       assert.equal(order.items[0].quantity, 2);
       assert.equal(await db.customerCheckout.count({ where: { accountId: account.id } }), 1);
+      const history = await buyer.request('/customer/orders?pageSize=1');
+      assert.equal(history.meta.total, 1);
+      assert.equal(history.data[0].id, order.id);
+      assert.equal(history.data[0].items[0].quantity, 2);
+      assert.equal(history.data[0].paymentStatus, 'UNPAID');
+      assert.equal(history.data[0].balance, quote.total);
+      assert.equal(history.data[0].businessSnapshot, undefined);
+      assert.equal(history.data[0].createdById, undefined);
+      assert.equal((await buyer.request('/customer/orders?pageSize=1&page=2')).data.length, 0);
+      await buyer.request('/customer/orders', { headers: { 'X-Account-ID': ownerUser.id }, status: 401 });
+      const otherCustomer = await db.customer.create({ data: { name: profile.name, contact: 'fixture contact', account: { create: { email: 'other-checkout-' + suffix + '@example.test', passwordHash: account.passwordHash } } }, include: { account: true } });
+      try {
+        const other = client(); await other.request('/customer/session');
+        await other.request('/customer/login', { method: 'POST', data: { email: otherCustomer.account.email, password } });
+        assert.equal((await other.request('/customer/orders?accountId=' + account.id)).data.length, 0, 'Matching name/contact and spoofed query cannot expose another account order');
+      } finally { await db.customerAccount.delete({ where: { id: otherCustomer.account.id } }); await db.customer.delete({ where: { id: otherCustomer.id } }); }
       await buyer.request('/customer/checkout', { method: 'POST', data: { ...request, contact: 'different' }, key, status: 409 });
       const staffView = client(); await staffView.login(ownerUser.email);
       assert.equal((await staffView.request('/orders/' + order.id)).data.id, order.id);
+      let tracking = (await staffView.request('/orders/' + order.id)).data;
+      for (const status of ['CONFIRMED', 'PREPARING', 'READY']) tracking = (await staffView.request('/orders/' + order.id + '/status', { method: 'POST', data: { status, version: tracking.version } })).data;
+      assert.equal((await buyer.request('/customer/orders')).data[0].status, 'READY');
       await buyer.request('/orders/' + order.id, { status: 401 });
       await db.variant.update({ where: { id: variant.id }, data: { active: false } });
       await buyer.request('/customer/quote', { method: 'POST', data: payload, status: 409 });
     } finally {
       const placed = await db.customerCheckout.findMany({ where: { accountId: account.id } });
-      for (const checkout of placed) { await db.orderItem.deleteMany({ where: { orderId: checkout.orderId } }); await db.customerCheckout.delete({ where: { id: checkout.id } }); await db.order.delete({ where: { id: checkout.orderId } }); }
+      for (const checkout of placed) { await db.orderHistory.deleteMany({ where: { orderId: checkout.orderId } }); await db.orderItem.deleteMany({ where: { orderId: checkout.orderId } }); await db.customerCheckout.delete({ where: { id: checkout.id } }); await db.order.delete({ where: { id: checkout.orderId } }); }
       await db.variant.deleteMany({ where: { menuItemId: item.id } }); await db.menuItem.delete({ where: { id: item.id } }); await db.category.delete({ where: { id: group.id } });
       await db.customerAccount.delete({ where: { id: account.id } }); await db.customer.delete({ where: { id: account.customerId } });
     }

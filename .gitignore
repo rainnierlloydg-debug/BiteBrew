@@ -20,3 +20,11 @@
 /.runtime
 /.bootstrap-temp
 Thumbs.db
+
+/node-app/generated
+/.vercel
+/node-app/.vercel
+
+.env.*
+!.env.example
+!.env.supabase.example
