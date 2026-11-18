@@ -32,7 +32,9 @@
     "build:vercel": "node scripts/build-vercel.js",
     "db:generate:postgres": "node scripts/postgres-schema.js && prisma generate --schema prisma/postgres/schema.prisma",
     "db:deploy:postgres": "prisma migrate deploy --schema prisma/postgres/schema.prisma",
-    "cloud:configure": "node scripts/configure-cloud.js"
+    "cloud:configure": "node scripts/configure-cloud.js",
+    "email:check": "node scripts/email-setup.js --check",
+    "email:setup": "node scripts/email-setup.js --setup"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

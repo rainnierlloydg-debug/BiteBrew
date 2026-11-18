@@ -26,6 +26,8 @@
     "test:browser": "npm --prefix node-app run test:browser",
     "test:schema": "npm --prefix node-app run test:schema",
     "menu:expand": "npm --prefix node-app run menu:expand",
-    "rebrand": "npm --prefix node-app run rebrand"
+    "rebrand": "npm --prefix node-app run rebrand",
+    "email:check": "npm --prefix node-app run email:check",
+    "email:setup": "npm --prefix node-app run email:setup"
   }
 }

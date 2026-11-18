@@ -280,7 +280,7 @@ test('MySQL API, workflow, reports and authenticated WebSocket integration', { s
     const data = { roomId: room.id, clientId: randomUUID(), text: '<img src=x onerror=alert(1)> DEMONSTRATION message' };
     const first = await socket.timeout(5000).emitWithAck('message:send', data), replay = await socket.timeout(5000).emitWithAck('message:send', data); assert.equal(first.data.id, replay.data.id);
     assert.equal((await db.chatMessage.findUnique({ where: { id: first.data.id } })).text, data.text);
-    const history = await kitchen.request('/chat/rooms/' + room.id + '/messages?after=0'); assert.ok(history.data.some(row => row.id === first.data.id));
+    const history = await kitchen.request('/chat/rooms/' + room.id + '/messages?after=' + (first.data.id - 1)); assert.ok(history.data.some(row => row.id === first.data.id));
     const intruder = io(base, { transports: ['websocket'], auth: { csrf: 'invalid' }, extraHeaders: { Origin: process.env.APP_ORIGIN }, forceNew: true, reconnection: false }); sockets.push(intruder);
     await new Promise((resolve, reject) => { intruder.once('connect_error', resolve); intruder.once('connect', () => reject(new Error('Anonymous WebSocket connected.'))); });
   });

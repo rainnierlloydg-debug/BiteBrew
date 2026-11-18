@@ -5,6 +5,7 @@ import { db } from '../db.js';
 import { config } from '../config.js';
 import { hashPassword } from '../lib/password.js';
 import { fail } from '../lib/errors.js';
+import { smtpSettings } from '../lib/smtp-settings.js';
 
 const details = z.object({ name: z.string().trim().min(1).max(120), contact: z.string().trim().max(40).default(''), email: z.email().max(190).transform(value => value.toLowerCase().trim()), password: z.string().min(12).max(128), confirmPassword: z.string().min(12).max(128) }).strict().refine(value => value.password === value.confirmPassword, { path: ['confirmPassword'], message: 'Passwords do not match.' });
 const tokenSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -13,13 +14,11 @@ const codeHash = (token, code) => createHmac('sha256', config.secret).update(tok
 const cooldown = 60_000, lifetime = 10 * 60_000;
 
 export async function sendConfirmation({ email, code }) {
-  const env = process.env;
-  if (!env.SMTP_HOST || !env.SMTP_FROM) fail(503, 'EMAIL_UNAVAILABLE', 'Email verification is temporarily unavailable. Please contact the administrator.');
-  const secure = env.SMTP_SECURE === 'true';
-  const transport = nodemailer.createTransport({ host: env.SMTP_HOST, port: Number(env.SMTP_PORT || (secure ? 465 : 587)), secure, requireTLS: !secure,
-    ...(env.SMTP_USER ? { auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } } : {}), connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 20000, disableFileAccess: true, disableUrlAccess: true });
+  const mail = smtpSettings();
+  if (!mail.configured) fail(503, 'EMAIL_UNAVAILABLE', 'Email verification is temporarily unavailable. Please contact the administrator.');
+  const transport = nodemailer.createTransport(mail.options);
   try {
-    const result = await transport.sendMail({ from: env.SMTP_FROM, to: email, subject: 'Bite & Brew confirmation code', text: `Your Bite & Brew confirmation code is ${code}.\n\nThis code expires in 10 minutes. Do not share it. If you did not request an account, ignore this email.` });
+    const result = await transport.sendMail({ from: mail.from, to: email, subject: 'Bite & Brew confirmation code', text: `Your Bite & Brew confirmation code is ${code}.\n\nThis code expires in 10 minutes. Do not share it. If you did not request an account, ignore this email.` });
     if (!result.accepted?.length) throw new Error('Recipient rejected');
   } catch { fail(503, 'EMAIL_UNAVAILABLE', 'We could not send your confirmation code. Please try again later.'); }
   finally { transport.close(); }
