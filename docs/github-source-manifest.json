@@ -1,6 +1,6 @@
 {
-  "repository": "https://github.com/rainnierlloydg-debug/Bite-Brew.git",
-  "status": "Local commits prepared in .bootstrap-temp/bite-brew-github. main includes all three named contribution branches. Remote branch renaming is pending because the agent cannot connect to github.com:443.",
+  "repository": "https://github.com/rainnierlloydg-debug/BiteBrew.git",
+  "status": "Historical source inventory only. File hashes and contribution grouping describe an earlier snapshot, not the current main branch. Use Git and the current README for checkout/setup.",
   "groups": {
     "rainnier-branch": {
       "author": "rainnierlloydg-debug",
@@ -601,5 +601,6 @@
     "rainnier-branch": "29886fc",
     "macky-branch": "667dfc8",
     "zyreen-branch": "5c78d41"
-  }
+  },
+  "scope": "historical_source_inventory"
 }

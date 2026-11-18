@@ -85,7 +85,7 @@ Use this procedure for a new installation. If `.env` and the database already ex
 ### 1. Clone and install dependencies
 
 ```powershell
-git clone https://github.com/rainnierlloydg-debug/BiteBrew.git
+git clone --branch main https://github.com/rainnierlloydg-debug/BiteBrew.git
 cd BiteBrew
 npm.cmd --prefix node-app ci --include=dev
 ```
@@ -172,7 +172,7 @@ Do not rerun `setup:local` or `import:legacy` as a routine startup step. Save pe
 
 | Role | Main responsibilities |
 | --- | --- |
-| Owner | Settings, menu/pricing, staff approvals, administration, reports, and authorized financial corrections |
+| Owner | Settings, menu/pricing, staff accounts, administration, reports, and authorized financial corrections |
 | Cashier | POS, customer/order handling, collections, scoped reports, and communication |
 | Kitchen | Preparation queue, permitted preparation updates, chat, and notifications |
 
@@ -371,7 +371,7 @@ Legacy import is optional and requires separately preserved source configuration
 | Missing Prisma client/migrations | Run `db:generate` and `db:deploy` after installing dependencies |
 | React packages/build tools missing | Run `npm.cmd --prefix node-app ci --include=dev` |
 | Port `3000` in use | Stop the other instance or change both `PORT` and `APP_ORIGIN` consistently |
-| Newly registered staff cannot log in | Owner approval and an assigned role are required |
+| Staff account cannot log in | The owner creates the account, assigns its role and ensures it is active; public staff signup is disabled |
 | Sign-in opens the wrong account | Use `/login.html`; staff and customer accounts must use unique email addresses |
 | Session/security-token errors | Use the configured origin; sign in again and check for account switching in another tab |
 | Old screen after updating | Save pending work, apply the PWA update, and refresh with Ctrl+F5 |
@@ -389,6 +389,8 @@ Legacy import is optional and requires separately preserved source configuration
 **`main` contains the latest integrated application.** Contributor branches preserve their contribution history and may be behind `main`. Use a working branch for new changes and integrate after review/checks. Commit authorship and the authenticated account performing a push are separate identities.
 
 ## Documentation
+
+- [Cloning, updating and checking your version (Tagalog guide)](docs/CLONE_AND_UPDATE.md)
 
 - [Detailed setup and feature notes](node-app/README.md)
 - [Roles and demonstration guide](node-app/docs/GUIDE.md)
