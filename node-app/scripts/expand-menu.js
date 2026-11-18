@@ -53,7 +53,7 @@ export async function expandMenu(actor, { rebrand = false } = {}) {
     }
     await audit(tx, current, 'menu.expanded', 'menu_items', null, null, { productsCreated, demoPricing: true, source: source.source });
     return { productsCreated, milkTeaProducts: source.products.filter(item => item.category === 'Milk Tea').length, friesProducts: source.products.filter(item => item.category === 'Fries').length, burgerProducts: source.products.filter(item => item.category === 'Burgers').length, demoPricing: true, rebranded: rebrand };
-  });
+  }, { timeout: 60000 });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.join(root, 'scripts/expand-menu.js')) {

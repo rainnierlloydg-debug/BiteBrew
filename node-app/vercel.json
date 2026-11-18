@@ -1,19 +1,33 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "express",
-  "installCommand": "PRISMA_SKIP_POSTINSTALL_GENERATE=true npm ci",
+  "installCommand": "PRISMA_SKIP_POSTINSTALL_GENERATE=true npm ci --include=dev",
   "buildCommand": "npm run build:vercel",
   "headers": [
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
       ]
     },
     {
       "source": "/(.*).html",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
+  ],
+  "regions": [
+    "sin1"
   ]
 }

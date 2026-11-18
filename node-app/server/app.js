@@ -17,10 +17,9 @@ import { overdueNotifications, deliverPush } from './services/notifications.js';
 import { z } from 'zod';
 import { applyBranding } from './services/branding.js';
 
-export async function createApplication({ jobs = true, verificationOptions, background } = {}) {
+export async function createApplication({ app = express(), jobs = true, verificationOptions, background } = {}) {
   validateEnvironment(); await db.$connect();
   if (!config.serverless) await applyBranding();
-  const app = express();
   app.disable('x-powered-by'); app.set('trust proxy', config.trustProxy);
   app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"], imgSrc: ["'self'", 'data:', 'blob:'], connectSrc: ["'self'", ...config.allowedOrigins.map(origin => origin.replace(/^http/, 'ws'))], fontSrc: ["'self'"], frameSrc: ["'self'"], objectSrc: ["'none'"], baseUri: ["'self'"], formAction: ["'self'"], upgradeInsecureRequests: config.production ? [] : null } }, crossOriginEmbedderPolicy: false }));
   app.use(express.json({ limit: '256kb' }));
@@ -48,7 +47,7 @@ export async function createApplication({ jobs = true, verificationOptions, back
   });
   app.get('/sw.js', (req, res) => res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }).sendFile(path.join(root, 'public/sw.js')));
   app.use(express.static(path.join(root, 'public'), { dotfiles: 'deny', maxAge: config.production ? '1h' : 0, index: 'index.html' }));
-  app.get('/', (req, res) => res.sendFile(path.join(root, 'public/index.html')));
+  app.get('/', (req, res) => config.serverless ? res.redirect('/index.html') : res.sendFile(path.join(root, 'public/index.html')));
   app.use((req, res, next) => next(Object.assign(new Error('Page not found.'), { status: 404, code: 'NOT_FOUND' })));
   app.use(errorHandler);
   let running = false, lastTick = 0;

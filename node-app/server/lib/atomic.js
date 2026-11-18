@@ -10,7 +10,7 @@ export async function lockOrder(tx, id) {
   if (!order) fail(404, 'NOT_FOUND', 'Order not found.');
   return order;
 }
-export async function atomic(actor, key, operation, payload, work) {
+export async function atomic(actor, key, operation, payload, work, { timeout = 20000 } = {}) {
   z.uuid().parse(key);
   const hash = sha256(JSON.stringify(jsonValue(payload)));
   const unique = { userId: actor.id, operation, key };
@@ -29,7 +29,7 @@ export async function atomic(actor, key, operation, payload, work) {
         const result = jsonValue(await work(tx, current));
         await tx.idempotency.update({ where: { id: entry.id }, data: { result } });
         return result;
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000, maxWait: 10000 });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout, maxWait: 10000 });
     } catch (error) {
       if ((error.code === 'P2034' || error.code === 'P2002') && attempt < 3) { await new Promise(resolve => setTimeout(resolve, 25 * 2 ** attempt)); continue; }
       throw error;

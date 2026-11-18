@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
 import { config, validateEnvironment } from '../server/config.js';
+import { postgresConnection } from '../server/lib/postgres.js';
 
 validateEnvironment();
 if (!/^postgres/.test(process.env.DATABASE_URL) || !config.storageUrl || !config.storageKey || !process.env.DIRECT_URL) throw new Error('Configure the Supabase environment before cloud setup.');
@@ -10,7 +11,7 @@ const { data: existing } = await client.storage.getBucket(config.storageBucket);
 const options = { public: false, fileSizeLimit: 20 * 1024 * 1024, allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'] };
 const { error } = existing ? await client.storage.updateBucket(config.storageBucket, options) : await client.storage.createBucket(config.storageBucket, options);
 if (error) throw new Error('Cloud media bucket setup failed. Check the Supabase server key and permissions.');
-const database = new pg.Client({ connectionString: process.env.DIRECT_URL });
+const database = new pg.Client(postgresConnection(process.env.DIRECT_URL));
 try {
   await database.connect();
   await database.query('CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog');
